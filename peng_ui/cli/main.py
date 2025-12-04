@@ -2,7 +2,10 @@
 
 import warnings
 
-import pygame
+import pygame as pg
+
+from peng_ui.elements.button import Button
+from peng_ui.utils import RenderContext
 
 SCREEN_WIDTH = 800
 SCREEN_HEIGHT = 600
@@ -17,68 +20,46 @@ GREEN = (0, 255, 0)
 
 class Viewer:
     def __init__(self):
-        pygame.init()
-        self.screen = pygame.display.set_mode((SCREEN_WIDTH, SCREEN_HEIGHT))
-        pygame.display.set_caption(CAPTION)
+        pg.init()
+        self.screen = pg.display.set_mode((SCREEN_WIDTH, SCREEN_HEIGHT))
+        pg.display.set_caption(CAPTION)
         self.font = load_font()
-        self.last_event_text = "No recent events..."
+        self.last_event_text = ""
         self.running = True
+        self.render_context = RenderContext.default()
+
+        self.button = Button(pg.Rect(50, 50, 120, 40), "hello")
 
     def run(self):
         while self.running:
-            for event in pygame.event.get():
-                if event.type == pygame.QUIT:
-                    print("--- Event: QUIT (Window closed by user) ---")
-                    self.running = False
-                elif event.type == pygame.KEYDOWN:
-                    key_name = pygame.key.name(event.key)
-                    print(f"--- Event: KEYDOWN --- Key: '{key_name}' (Code: {event.key})")
-                    self.last_event_text = f"Key Down: {key_name}"
-                elif event.type == pygame.KEYUP:
-                    key_name = pygame.key.name(event.key)
-                    print(f"--- Event: KEYUP --- Key: '{key_name}' (Code: {event.key})")
-                    self.last_event_text = f"Key Up: {key_name}"
-                elif event.type == pygame.MOUSEMOTION:
-                    x, y = event.pos
-                    rel_x, rel_y = event.rel
-                    print(f"--- Event: MOUSEMOTION --- Pos: ({x}, {y}) | Relative Movement: ({rel_x}, {rel_y})")
-                    self.last_event_text = f"Mouse Position: ({x}, {y})"
-                elif event.type == pygame.MOUSEBUTTONDOWN:
-                    x, y = event.pos
-                    button = event.button
-                    button_names = {1: "Left Click", 2: "Middle Click", 3: "Right Click", 4: "Scroll Up", 5: "Scroll Down"}
-                    button_name = button_names.get(button, f"Button {button}")
+            self.handle_events()
+            self.tick()
+            self.render()
 
-                    print(f"--- Event: MOUSEBUTTONDOWN --- {button_name} at ({x}, {y})")
-                    self.last_event_text = f"Click: {button_name}"
-                elif event.type == pygame.MOUSEBUTTONUP:
-                    x, y = event.pos
-                    button = event.button
-                    button_names = {1: "Left Click", 2: "Middle Click",
-                                    3: "Right Click"}  # Scroll events don't usually have an 'UP' counterpart
-                    button_name = button_names.get(button, f"Button {button}")
+        pg.quit()
 
-                    # Filter out the scroll wheel events for release, as they are usually only DOWN events
-                    if button <= 3:
-                        print(f"--- Event: MOUSEBUTTONUP --- {button_name} released at ({x}, {y})")
-                        self.last_event_text = f"Release: {button_name}"
+    def handle_events(self):
+        for event in pg.event.get():
+            if event.type == pg.QUIT:
+                self.running = False
+                break
+            self.button.handle_event(event)
 
-            # Clear the screen
-            self.screen.fill(BLACK)
+    def tick(self):
+        if self.button.clicked():
+            print('button clicked')
 
-            # Display the last event text
-            draw_text(self.screen, self.last_event_text, GREEN, SCREEN_WIDTH // 2, SCREEN_HEIGHT // 2, self.font)
-
-            # Flip the display to make the changes visible
-            pygame.display.flip()
-
-        pygame.quit()
+    def render(self):
+        self.screen.fill(BLACK)
+        draw_text(self.screen, self.last_event_text, GREEN, SCREEN_WIDTH // 2, SCREEN_HEIGHT // 2, self.font)
+        self.button.render(self.screen, self.render_context)
+        pg.display.flip()
 
 
 def load_font():
     try:
-        font = pygame.font.Font(None, 36)  # Use default font, size 36
-    except pygame.error:
+        font = pg.font.Font(None, 36)
+    except pg.error:
         warnings.warn("Warning: Could not load default font. Text will not be rendered.")
         font = None
     return font
@@ -91,8 +72,6 @@ def draw_text(surface, text, color, x, y, font):
         text_rect = text_surface.get_rect(center=(x, y))
         surface.blit(text_surface, text_rect)
 
-
-# --- Main Game Loop ---
 
 if __name__ == '__main__':
     viewer = Viewer()
