@@ -33,7 +33,7 @@ class Viewer:
 
         self.button = Button(pg.Rect(50, 50, 120, 40), "hello")
         self.label = Label(pg.Rect(50, 100, 120, 40), "hello")
-        self.edit_field = EditField(pg.Rect(200, 50, 120, 40), "hello")
+        self.edit_field = EditField(pg.Rect(200, 50, 220, 40), "hello")
 
     def run(self):
         while self.running:

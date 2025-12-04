@@ -30,13 +30,14 @@ class EditField(BaseElement):
         self.selection_start: Optional[int] = None  # Start of text selection
         self.is_focused: bool = False  # Whether the field is focused
         self.mouse_down_pos: Optional[int] = None  # For tracking drag selection
+        self.text_offset: int = 0  # Horizontal scroll offset for text
 
         self.font = load_font()
 
     def _get_char_index_at_pos(self, pos: Tuple[int, int]) -> int:
         """Calculate the character index in text based on mouse position."""
         # Convert screen position to relative position within edit field
-        rel_x = pos[0] - self.rect.x - 5  # Subtract padding
+        rel_x = pos[0] - self.rect.x - 5 + self.text_offset  # Add offset to account for scrolling
 
         if not self.text:
             return 0
@@ -159,6 +160,84 @@ class EditField(BaseElement):
 
         return pos
 
+    def _update_text_offset(self):
+        """Update text offset to keep cursor visible."""
+        padding = 5
+        visible_width = self.rect.width - 2 * padding
+
+        # Calculate cursor position in text coordinates
+        text_before_cursor = self.text[:self.cursor_pos]
+        cursor_x = self.font.size(text_before_cursor)[0]
+
+        # Adjust offset to keep cursor visible
+        # If cursor is to the right of visible area, scroll right
+        if cursor_x - self.text_offset > visible_width:
+            self.text_offset = cursor_x - visible_width
+
+        # If cursor is to the left of visible area, scroll left
+        if cursor_x < self.text_offset:
+            self.text_offset = cursor_x
+
+        # Don't scroll past the beginning
+        if self.text_offset < 0:
+            self.text_offset = 0
+
+    def _insert_text(self, char: str):
+        """Insert a character at the cursor position."""
+        self._delete_selection()
+        self.text = self.text[:self.cursor_pos] + char + self.text[self.cursor_pos:]
+        self.cursor_pos += len(char)
+        self.selection_start = None
+        self._update_text_offset()
+
+    def _move_cursor_left(self, shift_pressed: bool):
+        """Move cursor left, optionally extending selection."""
+        if shift_pressed:
+            if self.selection_start is None:
+                self.selection_start = self.cursor_pos
+            if self.cursor_pos > 0:
+                self.cursor_pos -= 1
+        else:
+            if self.selection_start is not None:
+                self.cursor_pos = min(self.selection_start, self.cursor_pos)
+                self.selection_start = None
+            elif self.cursor_pos > 0:
+                self.cursor_pos -= 1
+        self._update_text_offset()
+
+    def _move_cursor_right(self, shift_pressed: bool):
+        """Move cursor right, optionally extending selection."""
+        if shift_pressed:
+            if self.selection_start is None:
+                self.selection_start = self.cursor_pos
+            if self.cursor_pos < len(self.text):
+                self.cursor_pos += 1
+        else:
+            if self.selection_start is not None:
+                self.cursor_pos = max(self.selection_start, self.cursor_pos)
+                self.selection_start = None
+            elif self.cursor_pos < len(self.text):
+                self.cursor_pos += 1
+        self._update_text_offset()
+
+    def _move_cursor_home(self, shift_pressed: bool):
+        """Move cursor to the start of the text."""
+        if shift_pressed and self.selection_start is None:
+            self.selection_start = self.cursor_pos
+        self.cursor_pos = 0
+        if not shift_pressed:
+            self.selection_start = None
+        self._update_text_offset()
+
+    def _move_cursor_end(self, shift_pressed: bool):
+        """Move cursor to the end of the text."""
+        if shift_pressed and self.selection_start is None:
+            self.selection_start = self.cursor_pos
+        self.cursor_pos = len(self.text)
+        if not shift_pressed:
+            self.selection_start = None
+        self._update_text_offset()
+
     def _move_cursor_word_left(self, shift_pressed: bool):
         """Move cursor to the start of the previous word."""
         if shift_pressed and self.selection_start is None:
@@ -168,6 +247,7 @@ class EditField(BaseElement):
 
         if not shift_pressed:
             self.selection_start = None
+        self._update_text_offset()
 
     def _move_cursor_word_right(self, shift_pressed: bool):
         """Move cursor to the end of the current/next word."""
@@ -178,6 +258,7 @@ class EditField(BaseElement):
 
         if not shift_pressed:
             self.selection_start = None
+        self._update_text_offset()
 
     def _handle_backspace(self, ctrl_pressed: bool = False):
         """Handle backspace key."""
@@ -191,8 +272,9 @@ class EditField(BaseElement):
             elif self.cursor_pos > 0:
                 self.text = self.text[:self.cursor_pos - 1] + self.text[self.cursor_pos:]
                 self.cursor_pos -= 1
+        self._update_text_offset()
 
-    def _handle_delete(self, rel_x: int, ctrl_pressed: bool = False):
+    def _handle_delete(self, ctrl_pressed: bool = False):
         """Handle delete key."""
         if not self._delete_selection():
             if ctrl_pressed:
@@ -202,19 +284,7 @@ class EditField(BaseElement):
                     self.text = self.text[:self.cursor_pos] + self.text[new_pos:]
             elif self.cursor_pos < len(self.text):
                 self.text = self.text[:self.cursor_pos] + self.text[self.cursor_pos + 1:]
-
-        # Find the closest character position
-        for i in range(len(self.text) + 1):
-            text_width = self.font.size(self.text[:i])[0]
-            if rel_x <= text_width:
-                # Check if we're closer to previous or current position
-                if i > 0:
-                    prev_width = self.font.size(self.text[:i - 1])[0]
-                    if rel_x - prev_width < text_width - rel_x:
-                        return i - 1
-                return i
-
-        return len(self.text)
+        self._update_text_offset()
 
     def _get_selection_range(self) -> tuple[int, int]:
         """Get the start and end of the current selection (ordered)."""
@@ -231,57 +301,6 @@ class EditField(BaseElement):
             self.selection_start = None
             return True
         return False
-
-    def _insert_text(self, char: str):
-        """Insert a character at the cursor position."""
-        self._delete_selection()
-        self.text = self.text[:self.cursor_pos] + char + self.text[self.cursor_pos:]
-        self.cursor_pos += len(char)
-        self.selection_start = None
-
-    def _move_cursor_left(self, shift_pressed: bool):
-        """Move cursor left, optionally extending selection."""
-        if shift_pressed:
-            if self.selection_start is None:
-                self.selection_start = self.cursor_pos
-            if self.cursor_pos > 0:
-                self.cursor_pos -= 1
-        else:
-            if self.selection_start is not None:
-                self.cursor_pos = min(self.selection_start, self.cursor_pos)
-                self.selection_start = None
-            elif self.cursor_pos > 0:
-                self.cursor_pos -= 1
-
-    def _move_cursor_right(self, shift_pressed: bool):
-        """Move cursor right, optionally extending selection."""
-        if shift_pressed:
-            if self.selection_start is None:
-                self.selection_start = self.cursor_pos
-            if self.cursor_pos < len(self.text):
-                self.cursor_pos += 1
-        else:
-            if self.selection_start is not None:
-                self.cursor_pos = max(self.selection_start, self.cursor_pos)
-                self.selection_start = None
-            elif self.cursor_pos < len(self.text):
-                self.cursor_pos += 1
-
-    def _move_cursor_home(self, shift_pressed: bool):
-        """Move cursor to the start of the text."""
-        if shift_pressed and self.selection_start is None:
-            self.selection_start = self.cursor_pos
-        self.cursor_pos = 0
-        if not shift_pressed:
-            self.selection_start = None
-
-    def _move_cursor_end(self, shift_pressed: bool):
-        """Move cursor to the end of the text."""
-        if shift_pressed and self.selection_start is None:
-            self.selection_start = self.cursor_pos
-        self.cursor_pos = len(self.text)
-        if not shift_pressed:
-            self.selection_start = None
 
     def _select_all(self):
         """Select all text."""
@@ -328,7 +347,18 @@ class EditField(BaseElement):
 
         # Text rendering area with padding
         padding = 5
-        text_x = self.rect.left + padding
+        text_area = pg.Rect(
+            self.rect.left + padding,
+            self.rect.top + padding,
+            self.rect.width - 2 * padding,
+            self.rect.height - 2 * padding
+        )
+
+        # Create a subsurface for clipping
+        clip_rect = screen.get_clip()
+        screen.set_clip(text_area)
+
+        text_x = text_area.left - self.text_offset
         text_y = self.rect.centery
 
         # Draw selection highlight if there's a selection
@@ -344,9 +374,9 @@ class EditField(BaseElement):
 
                 selection_rect = pg.Rect(
                     text_x + before_width,
-                    self.rect.top + padding,
+                    text_area.top,
                     selection_width,
-                    self.rect.height - 2 * padding
+                    text_area.height
                 )
                 # Draw selection highlight
                 pg.draw.rect(screen, (100, 150, 200), selection_rect)
@@ -373,8 +403,8 @@ class EditField(BaseElement):
                 text_before_cursor = self.text[:self.cursor_pos]
                 cursor_x = text_x + self.font.size(text_before_cursor)[0]
 
-                cursor_height = self.rect.height - 2 * padding
-                cursor_top = self.rect.top + padding
+                cursor_height = text_area.height
+                cursor_top = text_area.top
 
                 # Draw cursor line
                 pg.draw.line(
@@ -384,3 +414,6 @@ class EditField(BaseElement):
                     (cursor_x, cursor_top + cursor_height),
                     2
                 )
+
+        # Restore original clip rect
+        screen.set_clip(clip_rect)
