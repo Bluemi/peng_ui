@@ -3,7 +3,7 @@
 case "$1" in
 	r)
 		shift
-		python3 peng_ui/cli/main.py "$@"
+		python3 scripts/main.py "$@"
 		;;
 	t)
 		shift
