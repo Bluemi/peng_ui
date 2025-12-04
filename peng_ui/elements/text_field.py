@@ -41,28 +41,108 @@ class TextField(BaseElement):
             return [""]
         return self.text.split('\n')
 
-    def _get_cursor_line_col(self) -> Tuple[int, int]:
-        """Get the line and column position of the cursor."""
-        lines = self._get_lines()
-        pos = 0
-        for line_idx, line in enumerate(lines):
-            line_len = len(line) + 1  # +1 for newline
-            if pos + line_len > self.cursor_pos:
-                col = self.cursor_pos - pos
-                return line_idx, col
-            pos += line_len
-        # Cursor at end
-        return len(lines) - 1, len(lines[-1]) if lines else 0
+    def _wrap_text(self, text: str, max_width: int) -> List[str]:
+        """
+        Wrap text to fit within max_width, breaking at word boundaries.
+        Returns a list of wrapped lines.
+        """
+        if not text:
+            return [""]
 
-    def _get_pos_from_line_col(self, line: int, col: int) -> int:
-        """Convert line and column to absolute position."""
-        lines = self._get_lines()
+        wrapped_lines = []
+        paragraphs = text.split('\n')
+
+        for paragraph in paragraphs:
+            if not paragraph:
+                wrapped_lines.append("")
+                continue
+
+            words = paragraph.split(' ')
+            current_line = ""
+
+            for word in words:
+                # Test if adding this word would exceed max width
+                test_line = current_line + (" " if current_line else "") + word
+                test_width = self.font.size(test_line)[0]
+
+                if test_width <= max_width:
+                    # Word fits on current line
+                    current_line = test_line
+                else:
+                    # Word doesn't fit
+                    if current_line:
+                        # Save current line and start new one
+                        wrapped_lines.append(current_line)
+                        current_line = word
+                    else:
+                        # Single word is too long, force it on its own line
+                        wrapped_lines.append(word)
+                        current_line = ""
+
+            # Add the last line of this paragraph
+            if current_line:
+                wrapped_lines.append(current_line)
+
+        return wrapped_lines if wrapped_lines else [""]
+
+    def _get_wrapped_lines(self) -> List[str]:
+        """Get text lines with word wrapping applied."""
+        padding = 5
+        max_width = self.rect.width - 2 * padding
+        return self._wrap_text(self.text, max_width)
+
+    def _get_cursor_line_col_wrapped(self) -> Tuple[int, int]:
+        """
+        Get the line and column position of the cursor in wrapped text.
+        Returns (wrapped_line_index, column_in_wrapped_line).
+        """
+        wrapped_lines = self._get_wrapped_lines()
         pos = 0
-        for i in range(min(line, len(lines))):
-            pos += len(lines[i]) + 1  # +1 for newline
-        if line < len(lines):
-            pos += min(col, len(lines[line]))
-        return pos
+
+        for wrapped_line_idx, wrapped_line in enumerate(wrapped_lines):
+            line_len = len(wrapped_line)
+
+            # Check if cursor is in this wrapped line
+            if pos + line_len >= self.cursor_pos:
+                col = self.cursor_pos - pos
+                return wrapped_line_idx, col
+
+            # For simplicity, add 1 for space unless it's the last word of a paragraph
+            chars_so_far = pos + line_len
+            if chars_so_far < len(self.text):
+                next_char = self.text[chars_so_far]
+                if next_char == '\n':
+                    pos += line_len + 1  # +1 for newline
+                elif next_char == ' ':
+                    pos += line_len + 1  # +1 for space
+                else:
+                    pos += line_len
+            else:
+                pos += line_len
+
+        # Cursor at end
+        return len(wrapped_lines) - 1, len(wrapped_lines[-1]) if wrapped_lines else 0
+
+    def _get_pos_from_wrapped_line_col(self, wrapped_line: int, col: int) -> int:
+        """Convert wrapped line and column to absolute position in original text."""
+        wrapped_lines = self._get_wrapped_lines()
+        pos = 0
+
+        for i in range(min(wrapped_line, len(wrapped_lines))):
+            line_len = len(wrapped_lines[i])
+            pos += line_len
+
+            # Add separator (space or newline) if not at end
+            if pos < len(self.text):
+                next_char = self.text[pos]
+                if next_char in (' ', '\n'):
+                    pos += 1
+
+        # Add column offset
+        if wrapped_line < len(wrapped_lines):
+            pos += min(col, len(wrapped_lines[wrapped_line]))
+
+        return min(pos, len(self.text))
 
     def _get_char_index_at_pos(self, pos: Tuple[int, int]) -> int:
         """Calculate the character index in text based on mouse position."""
@@ -70,19 +150,19 @@ class TextField(BaseElement):
         rel_x = pos[0] - self.rect.x - padding
         rel_y = pos[1] - self.rect.y - padding
 
-        # Calculate which line was clicked
+        # Calculate which wrapped line was clicked
         line_idx = self.scroll_offset + int(rel_y / self.line_height)
-        lines = self._get_lines()
-        
+        wrapped_lines = self._get_wrapped_lines()
+
         if line_idx < 0:
             return 0
-        if line_idx >= len(lines):
+        if line_idx >= len(wrapped_lines):
             return len(self.text)
 
-        # Find the column in that line
-        line_text = lines[line_idx]
+        # Find the column in that wrapped line
+        line_text = wrapped_lines[line_idx]
         if not line_text or rel_x <= 0:
-            return self._get_pos_from_line_col(line_idx, 0)
+            return self._get_pos_from_wrapped_line_col(line_idx, 0)
 
         # Find the closest character position in the line
         for i in range(len(line_text) + 1):
@@ -91,10 +171,10 @@ class TextField(BaseElement):
                 if i > 0:
                     prev_width = self.font.size(line_text[:i - 1])[0]
                     if rel_x - prev_width < text_width - rel_x:
-                        return self._get_pos_from_line_col(line_idx, i - 1)
-                return self._get_pos_from_line_col(line_idx, i)
+                        return self._get_pos_from_wrapped_line_col(line_idx, i - 1)
+                return self._get_pos_from_wrapped_line_col(line_idx, i)
 
-        return self._get_pos_from_line_col(line_idx, len(line_text))
+        return self._get_pos_from_wrapped_line_col(line_idx, len(line_text))
 
     def handle_event(self, event: pg.event.Event):
         super().handle_event(event)
@@ -207,26 +287,26 @@ class TextField(BaseElement):
         visible_height = self.rect.height - 2 * padding
         visible_lines = max(1, int(visible_height / self.line_height))
 
-        cursor_line, _ = self._get_cursor_line_col()
-        
+        cursor_line, _ = self._get_cursor_line_col_wrapped()
+
         # Scroll down if cursor is below visible area
         if cursor_line >= self.scroll_offset + visible_lines:
             self.scroll_offset = cursor_line - visible_lines + 1
-        
+
         # Scroll up if cursor is above visible area
         if cursor_line < self.scroll_offset:
             self.scroll_offset = cursor_line
-        
+
         self._clamp_scroll()
 
     def _clamp_scroll(self):
         """Ensure scroll offset is within valid bounds."""
-        lines = self._get_lines()
+        wrapped_lines = self._get_wrapped_lines()
         padding = 5
         visible_height = self.rect.height - 2 * padding
         visible_lines = max(1, int(visible_height / self.line_height))
-        
-        max_scroll = max(0, len(lines) - visible_lines)
+
+        max_scroll = max(0, len(wrapped_lines) - visible_lines)
         self.scroll_offset = max(0, min(self.scroll_offset, max_scroll))
 
     def _insert_text(self, char: str):
@@ -272,11 +352,11 @@ class TextField(BaseElement):
         if shift_pressed and self.selection_start is None:
             self.selection_start = self.cursor_pos
 
-        line, col = self._get_cursor_line_col()
+        line, col = self._get_cursor_line_col_wrapped()
         if line > 0:
-            lines = self._get_lines()
-            new_col = min(col, len(lines[line - 1]))
-            self.cursor_pos = self._get_pos_from_line_col(line - 1, new_col)
+            wrapped_lines = self._get_wrapped_lines()
+            new_col = min(col, len(wrapped_lines[line - 1]))
+            self.cursor_pos = self._get_pos_from_wrapped_line_col(line - 1, new_col)
 
         if not shift_pressed:
             self.selection_start = None
@@ -287,11 +367,11 @@ class TextField(BaseElement):
         if shift_pressed and self.selection_start is None:
             self.selection_start = self.cursor_pos
 
-        line, col = self._get_cursor_line_col()
-        lines = self._get_lines()
-        if line < len(lines) - 1:
-            new_col = min(col, len(lines[line + 1]))
-            self.cursor_pos = self._get_pos_from_line_col(line + 1, new_col)
+        line, col = self._get_cursor_line_col_wrapped()
+        wrapped_lines = self._get_wrapped_lines()
+        if line < len(wrapped_lines) - 1:
+            new_col = min(col, len(wrapped_lines[line + 1]))
+            self.cursor_pos = self._get_pos_from_wrapped_line_col(line + 1, new_col)
 
         if not shift_pressed:
             self.selection_start = None
@@ -306,9 +386,9 @@ class TextField(BaseElement):
             # Move to start of text
             self.cursor_pos = 0
         else:
-            # Move to start of current line
-            line, _ = self._get_cursor_line_col()
-            self.cursor_pos = self._get_pos_from_line_col(line, 0)
+            # Move to start of current wrapped line
+            line, _ = self._get_cursor_line_col_wrapped()
+            self.cursor_pos = self._get_pos_from_wrapped_line_col(line, 0)
 
         if not shift_pressed:
             self.selection_start = None
@@ -323,10 +403,10 @@ class TextField(BaseElement):
             # Move to end of text
             self.cursor_pos = len(self.text)
         else:
-            # Move to end of current line
-            line, _ = self._get_cursor_line_col()
-            lines = self._get_lines()
-            self.cursor_pos = self._get_pos_from_line_col(line, len(lines[line]))
+            # Move to end of current wrapped line
+            line, _ = self._get_cursor_line_col_wrapped()
+            wrapped_lines = self._get_wrapped_lines()
+            self.cursor_pos = self._get_pos_from_wrapped_line_col(line, len(wrapped_lines[line]))
 
         if not shift_pressed:
             self.selection_start = None
@@ -448,25 +528,25 @@ class TextField(BaseElement):
         clip_rect = screen.get_clip()
         screen.set_clip(text_area)
 
-        lines = self._get_lines()
+        wrapped_lines = self._get_wrapped_lines()
         visible_lines = max(1, int(text_area.height / self.line_height))
 
         # Draw text or placeholder
         if self.text:
-            # Draw visible lines
-            for i in range(self.scroll_offset, min(len(lines), self.scroll_offset + visible_lines)):
-                line_text = lines[i]
+            # Draw visible wrapped lines
+            for i in range(self.scroll_offset, min(len(wrapped_lines), self.scroll_offset + visible_lines)):
+                line_text = wrapped_lines[i]
                 y_pos = text_area.top + (i - self.scroll_offset) * self.line_height
 
-                # Get line start position in text
-                line_start_pos = self._get_pos_from_line_col(i, 0)
-                line_end_pos = line_start_pos + len(line_text)
+                # Get line start position in original text
+                line_start_pos = self._get_pos_from_wrapped_line_col(i, 0)
+                line_end_pos = self._get_pos_from_wrapped_line_col(i, len(line_text))
 
                 # Draw selection highlight for this line
                 if self.selection_start is not None and self.is_focused:
                     sel_start, sel_end = self._get_selection_range()
                     if sel_start < line_end_pos and sel_end > line_start_pos:
-                        # Calculate selection within this line
+                        # Calculate selection within this wrapped line
                         line_sel_start = max(0, sel_start - line_start_pos)
                         line_sel_end = min(len(line_text), sel_end - line_start_pos)
 
@@ -487,10 +567,10 @@ class TextField(BaseElement):
                     screen.blit(text_surface, (text_area.left, y_pos))
 
         elif not self.is_focused and self.placeholder:
-            # Draw placeholder
+            # Draw placeholder with wrapping
+            placeholder_wrapped = self._wrap_text(self.placeholder, text_area.width)
             placeholder_color = (100, 100, 100)
-            placeholder_lines = self.placeholder.split('\n')
-            for i, line in enumerate(placeholder_lines[:visible_lines]):
+            for i, line in enumerate(placeholder_wrapped[:visible_lines]):
                 y_pos = text_area.top + i * self.line_height
                 placeholder_surface = self.font.render(line, True, placeholder_color)
                 screen.blit(placeholder_surface, (text_area.left, y_pos))
@@ -500,11 +580,11 @@ class TextField(BaseElement):
             cursor_visible = (pg.time.get_ticks() // 500) % 2 == 0
 
             if cursor_visible:
-                cursor_line, cursor_col = self._get_cursor_line_col()
-                
+                cursor_line, cursor_col = self._get_cursor_line_col_wrapped()
+
                 # Only draw cursor if it's in the visible area
                 if self.scroll_offset <= cursor_line < self.scroll_offset + visible_lines:
-                    line_text = lines[cursor_line] if cursor_line < len(lines) else ""
+                    line_text = wrapped_lines[cursor_line] if cursor_line < len(wrapped_lines) else ""
                     cursor_x = text_area.left + self.font.size(line_text[:cursor_col])[0]
                     cursor_y = text_area.top + (cursor_line - self.scroll_offset) * self.line_height
 
