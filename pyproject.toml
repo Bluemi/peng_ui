@@ -1,0 +1,23 @@
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "PROJECT_NAME"
+version = "0.1.0"
+description = "YOUR_DESCRIPTION."
+authors = [
+    { name="Bruno Schilling", email="bruno.schilling@protonmail.ch" }
+]
+license = "MIT" 
+license-files = ["LICENSE"]
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = [
+]
+
+[project.optional-dependencies]
+dev = ["pytest"]
+
+[tool.setuptools.packages.find]
+where = ["."]
