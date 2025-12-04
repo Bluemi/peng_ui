@@ -129,10 +129,6 @@ class EditField(BaseElement):
         if pos == 0:
             return 0
 
-        # Move back to skip current word characters
-        while pos > 0 and not self.text[pos - 1].isspace():
-            pos -= 1
-
         # Move back to skip whitespace
         while pos > 0 and self.text[pos - 1].isspace():
             pos -= 1
