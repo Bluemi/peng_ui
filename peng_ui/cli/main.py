@@ -4,6 +4,7 @@ import warnings
 
 import pygame as pg
 
+from peng_ui.elements.text_field import TextField
 from peng_ui.elements.edit_field import EditField
 from peng_ui.elements.label import Label
 from peng_ui.elements.button import Button
@@ -34,6 +35,7 @@ class Viewer:
         self.button = Button(pg.Rect(50, 50, 120, 40), "hello")
         self.label = Label(pg.Rect(50, 100, 120, 40), "hello")
         self.edit_field = EditField(pg.Rect(200, 50, 220, 40), "hello")
+        self.text_field = TextField(pg.Rect(200, 100, 220, 140), "hello")
 
     def run(self):
         while self.running:
@@ -51,6 +53,7 @@ class Viewer:
             self.button.handle_event(event)
             self.label.handle_event(event)
             self.edit_field.handle_event(event)
+            self.text_field.handle_event(event)
 
     def tick(self):
         if self.button.is_clicked:
@@ -64,6 +67,7 @@ class Viewer:
         self.button.render(self.screen, self.render_context)
         self.label.render(self.screen, self.render_context)
         self.edit_field.render(self.screen, self.render_context)
+        self.text_field.render(self.screen, self.render_context)
         pg.display.flip()
 
 
