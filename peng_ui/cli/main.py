@@ -4,6 +4,7 @@ import warnings
 
 import pygame as pg
 
+from peng_ui.elements.label import Label
 from peng_ui.elements.button import Button
 from peng_ui.utils import RenderContext
 
@@ -29,6 +30,7 @@ class Viewer:
         self.render_context = RenderContext.default()
 
         self.button = Button(pg.Rect(50, 50, 120, 40), "hello")
+        self.label = Label(pg.Rect(50, 100, 120, 40), "hello")
 
     def run(self):
         while self.running:
@@ -44,15 +46,19 @@ class Viewer:
                 self.running = False
                 break
             self.button.handle_event(event)
+            self.label.handle_event(event)
 
     def tick(self):
-        if self.button.clicked():
+        if self.button.is_clicked:
             print('button clicked')
+        if self.label.is_clicked:
+            print('label clicked')
 
     def render(self):
         self.screen.fill(BLACK)
         draw_text(self.screen, self.last_event_text, GREEN, SCREEN_WIDTH // 2, SCREEN_HEIGHT // 2, self.font)
         self.button.render(self.screen, self.render_context)
+        self.label.render(self.screen, self.render_context)
         pg.display.flip()
 
 

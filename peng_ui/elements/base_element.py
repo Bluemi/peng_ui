@@ -10,8 +10,11 @@ class BaseElement(ABC):
     """
     Defines a base element class with different methods to implement functionality of ui elements.
     """
-    def __init__(self):
-        self.visible = True
+    def __init__(self, rect: pg.Rect):
+        self.visible: bool = True
+        self.is_hovered: bool = False
+        self.rect: pg.Rect = rect
+        self.is_clicked: bool = False
 
     @abstractmethod
     def handle_event(self, event: pg.event.Event):
@@ -19,6 +22,11 @@ class BaseElement(ABC):
         Handle an event.
         :param event: The pygame event to handle
         """
+        if event.type == pg.MOUSEMOTION:
+            self.is_hovered = self.rect.collidepoint(event.pos)
+        elif event.type == pg.MOUSEBUTTONUP:
+            if self.is_hovered:
+                self.is_clicked = True
 
     @abstractmethod
     def draw(self, screen: pg.Surface, render_context: RenderContext):
@@ -34,6 +42,7 @@ class BaseElement(ABC):
         """
         Called at the end of a frame.
         """
+        self.is_clicked = False
 
     @final
     def render(self, screen: pg.Surface, render_context: RenderContext):

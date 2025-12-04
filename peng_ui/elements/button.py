@@ -13,8 +13,7 @@ class Button(BaseElement):
             clicked_color: ColorType = (200, 200, 210), border_color: ColorType = (100, 100, 100),
             text_color: ColorType = (0, 0, 0)
     ):
-        super().__init__()
-        self.rect = rect
+        super().__init__(rect)
         self.text = text
 
         self.bg_color = bg_color
@@ -24,27 +23,14 @@ class Button(BaseElement):
         self.text_color = text_color
         self.border_width = 2
 
-        self._is_hovered: bool = False
-        self._is_clicked: bool = False
         self.text_surface: Optional[pg.Surface] = None
 
     def handle_event(self, event: pg.event.Event):
         super().handle_event(event)
 
-        if event.type == pg.MOUSEMOTION:
-            self._is_hovered = self.rect.collidepoint(event.pos)
-        if self._is_hovered and event.type == pg.MOUSEBUTTONUP:
-            self._is_clicked = True
-
-    def clicked(self) -> bool:
-        return self._is_clicked
-
-    def finalize(self):
-        self._is_clicked = False
-
     def draw(self, screen: pg.Surface, render_context: RenderContext):
         # Draw button background
-        if self._is_hovered:
+        if self.is_hovered:
             color = self.clicked_color if pg.mouse.get_pressed()[0] else self.hover_color
         else:
             color = self.bg_color
