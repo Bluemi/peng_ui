@@ -1,10 +1,9 @@
-from typing import Optional
+from typing import Optional, Tuple
 
 import pygame as pg
 
 from peng_ui.elements.base_element import BaseElement
-from peng_ui.utils import RenderContext, ColorType
-
+from peng_ui.utils import RenderContext, ColorType, load_font
 
 SCRAP_TEXT = 'text/plain;charset=utf-8'
 
@@ -32,9 +31,36 @@ class EditField(BaseElement):
         self.is_focused: bool = False  # Whether the field is focused
         self.mouse_down_pos: Optional[int] = None  # For tracking drag selection
 
+        self.font = load_font()
+
+    def _get_char_index_at_pos(self, pos: Tuple[int, int]) -> int:
+        """Calculate the character index in text based on mouse position."""
+        # Convert screen position to relative position within edit field
+        rel_x = pos[0] - self.rect.x - 5  # Subtract padding
+
+        if not self.text:
+            return 0
+
+        # If click is before text start
+        if rel_x <= 0:
+            return 0
+
+        # Find the closest character position
+        for i in range(len(self.text) + 1):
+            text_width = self.font.size(self.text[:i])[0]
+            if rel_x <= text_width:
+                # Check if we're closer to previous or current position
+                if i > 0:
+                    prev_width = self.font.size(self.text[:i - 1])[0]
+                    if rel_x - prev_width < text_width - rel_x:
+                        return i - 1
+                return i
+
+        return len(self.text)
+
     def handle_event(self, event: pg.event.Event):
         super().handle_event(event)
-        
+
         # Handle mouse button down - start selection
         if event.type == pg.MOUSEBUTTONDOWN and event.button == 1:
             if self.is_hovered:
@@ -46,13 +72,13 @@ class EditField(BaseElement):
             else:
                 self.is_focused = False
                 self.selection_start = None
-        
+
         # Handle mouse drag - update selection
         if event.type == pg.MOUSEMOTION:
             if self.mouse_down_pos is not None and pg.mouse.get_pressed()[0]:
                 if self.is_hovered or self.is_focused:
                     self.cursor_pos = self._get_char_index_at_pos(event.pos)
-        
+
         # Handle mouse button up - finish selection
         if event.type == pg.MOUSEBUTTONUP and event.button == 1:
             if self.mouse_down_pos is not None:
@@ -60,56 +86,134 @@ class EditField(BaseElement):
                 if self.selection_start == self.cursor_pos:
                     self.selection_start = None
             self.mouse_down_pos = None
-        
+
         # Handle keyboard input only if focused
         if self.is_focused:
             if event.type == pg.KEYDOWN:
+                ctrl_pressed = event.mod & pg.KMOD_CTRL
+                shift_pressed = event.mod & pg.KMOD_SHIFT
+
                 # Handle text input
                 if event.key == pg.K_BACKSPACE:
-                    self._handle_backspace()
+                    self._handle_backspace(ctrl_pressed)
                 elif event.key == pg.K_DELETE:
-                    self._handle_delete()
+                    self._handle_delete(ctrl_pressed)
                 elif event.key == pg.K_LEFT:
-                    self._move_cursor_left(event.mod & pg.KMOD_SHIFT)
+                    if ctrl_pressed:
+                        self._move_cursor_word_left(shift_pressed)
+                    else:
+                        self._move_cursor_left(shift_pressed)
                 elif event.key == pg.K_RIGHT:
-                    self._move_cursor_right(event.mod & pg.KMOD_SHIFT)
+                    if ctrl_pressed:
+                        self._move_cursor_word_right(shift_pressed)
+                    else:
+                        self._move_cursor_right(shift_pressed)
                 elif event.key == pg.K_HOME:
-                    self._move_cursor_home(event.mod & pg.KMOD_SHIFT)
+                    self._move_cursor_home(shift_pressed)
                 elif event.key == pg.K_END:
-                    self._move_cursor_end(event.mod & pg.KMOD_SHIFT)
-                elif event.key == pg.K_a and (event.mod & pg.KMOD_CTRL):
+                    self._move_cursor_end(shift_pressed)
+                elif event.key == pg.K_a and ctrl_pressed:
                     self._select_all()
-                elif event.key == pg.K_c and (event.mod & pg.KMOD_CTRL):
+                elif event.key == pg.K_c and ctrl_pressed:
                     self._copy_to_clipboard()
-                elif event.key == pg.K_v and (event.mod & pg.KMOD_CTRL):
+                elif event.key == pg.K_v and ctrl_pressed:
                     self._paste_from_clipboard()
-                elif event.key == pg.K_x and (event.mod & pg.KMOD_CTRL):
+                elif event.key == pg.K_x and ctrl_pressed:
                     self._cut_to_clipboard()
                 elif event.unicode and event.unicode.isprintable():
                     self._insert_text(event.unicode)
 
-    def _get_char_index_at_pos(self, mouse_pos) -> int:
-        """Get the character index at the mouse position."""
-        if not self.text:
+    def _find_word_start(self, pos: int) -> int:
+        """Find the start position of the word at or before the given position."""
+        if pos == 0:
             return 0
-        
-        # Get the relative x position within the edit field
-        rel_x = mouse_pos[0] - self.rect.left - 5  # 5px padding
-        
-        # Use a default font if render_context is not available yet
-        font = pg.font.Font(None, 24)
-        
+
+        # Move back to skip current word characters
+        while pos > 0 and not self.text[pos - 1].isspace():
+            pos -= 1
+
+        # Move back to skip whitespace
+        while pos > 0 and self.text[pos - 1].isspace():
+            pos -= 1
+
+        # Move back to the start of the previous word
+        while pos > 0 and not self.text[pos - 1].isspace():
+            pos -= 1
+
+        return pos
+
+    def _find_word_end(self, pos: int) -> int:
+        """Find the end position of the word at or after the given position."""
+        text_len = len(self.text)
+
+        if pos >= text_len:
+            return text_len
+
+        # Move forward to skip whitespace
+        while pos < text_len and self.text[pos].isspace():
+            pos += 1
+
+        # Move forward to the end of the current word
+        while pos < text_len and not self.text[pos].isspace():
+            pos += 1
+
+        return pos
+
+    def _move_cursor_word_left(self, shift_pressed: bool):
+        """Move cursor to the start of the previous word."""
+        if shift_pressed and self.selection_start is None:
+            self.selection_start = self.cursor_pos
+
+        self.cursor_pos = self._find_word_start(self.cursor_pos)
+
+        if not shift_pressed:
+            self.selection_start = None
+
+    def _move_cursor_word_right(self, shift_pressed: bool):
+        """Move cursor to the end of the current/next word."""
+        if shift_pressed and self.selection_start is None:
+            self.selection_start = self.cursor_pos
+
+        self.cursor_pos = self._find_word_end(self.cursor_pos)
+
+        if not shift_pressed:
+            self.selection_start = None
+
+    def _handle_backspace(self, ctrl_pressed: bool = False):
+        """Handle backspace key."""
+        if not self._delete_selection():
+            if ctrl_pressed:
+                # Delete word to the left
+                new_pos = self._find_word_start(self.cursor_pos)
+                if new_pos < self.cursor_pos:
+                    self.text = self.text[:new_pos] + self.text[self.cursor_pos:]
+                    self.cursor_pos = new_pos
+            elif self.cursor_pos > 0:
+                self.text = self.text[:self.cursor_pos - 1] + self.text[self.cursor_pos:]
+                self.cursor_pos -= 1
+
+    def _handle_delete(self, rel_x: int, ctrl_pressed: bool = False):
+        """Handle delete key."""
+        if not self._delete_selection():
+            if ctrl_pressed:
+                # Delete word to the right
+                new_pos = self._find_word_end(self.cursor_pos)
+                if new_pos > self.cursor_pos:
+                    self.text = self.text[:self.cursor_pos] + self.text[new_pos:]
+            elif self.cursor_pos < len(self.text):
+                self.text = self.text[:self.cursor_pos] + self.text[self.cursor_pos + 1:]
+
         # Find the closest character position
         for i in range(len(self.text) + 1):
-            text_width = font.size(self.text[:i])[0]
+            text_width = self.font.size(self.text[:i])[0]
             if rel_x <= text_width:
                 # Check if we're closer to previous or current position
                 if i > 0:
-                    prev_width = font.size(self.text[:i-1])[0]
+                    prev_width = self.font.size(self.text[:i - 1])[0]
                     if rel_x - prev_width < text_width - rel_x:
                         return i - 1
                 return i
-        
+
         return len(self.text)
 
     def _get_selection_range(self) -> tuple[int, int]:
@@ -134,19 +238,6 @@ class EditField(BaseElement):
         self.text = self.text[:self.cursor_pos] + char + self.text[self.cursor_pos:]
         self.cursor_pos += len(char)
         self.selection_start = None
-
-    def _handle_backspace(self):
-        """Handle backspace key."""
-        if not self._delete_selection():
-            if self.cursor_pos > 0:
-                self.text = self.text[:self.cursor_pos - 1] + self.text[self.cursor_pos:]
-                self.cursor_pos -= 1
-
-    def _handle_delete(self):
-        """Handle delete key."""
-        if not self._delete_selection():
-            if self.cursor_pos < len(self.text):
-                self.text = self.text[:self.cursor_pos] + self.text[self.cursor_pos + 1:]
 
     def _move_cursor_left(self, shift_pressed: bool):
         """Move cursor left, optionally extending selection."""
@@ -211,7 +302,7 @@ class EditField(BaseElement):
                 # Remove newlines and other problematic characters
                 clipboard_text = clipboard_text.replace('\n', '').replace('\r', '')
                 self._insert_text(clipboard_text)
-        except:
+        except pg.error:
             pass  # Clipboard might not be available
 
     def _cut_to_clipboard(self):
@@ -247,10 +338,10 @@ class EditField(BaseElement):
                 # Calculate selection rectangle
                 text_before_selection = self.text[:start]
                 selected_text = self.text[start:end]
-                
-                before_width = render_context.font.size(text_before_selection)[0]
-                selection_width = render_context.font.size(selected_text)[0]
-                
+
+                before_width = self.font.size(text_before_selection)[0]
+                selection_width = self.font.size(selected_text)[0]
+
                 selection_rect = pg.Rect(
                     text_x + before_width,
                     self.rect.top + padding,
@@ -262,13 +353,13 @@ class EditField(BaseElement):
 
         # Render text or placeholder
         if self.text:
-            text_surface = render_context.font.render(self.text, True, self.text_color)
+            text_surface = self.font.render(self.text, True, self.text_color)
             text_rect = text_surface.get_rect(midleft=(text_x, text_y))
             screen.blit(text_surface, text_rect)
         elif not self.is_focused and self.placeholder:
             # Draw placeholder text in a dimmer color
             placeholder_color = (100, 100, 100)
-            placeholder_surface = render_context.font.render(self.placeholder, True, placeholder_color)
+            placeholder_surface = self.font.render(self.placeholder, True, placeholder_color)
             placeholder_rect = placeholder_surface.get_rect(midleft=(text_x, text_y))
             screen.blit(placeholder_surface, placeholder_rect)
 
@@ -276,15 +367,15 @@ class EditField(BaseElement):
         if self.is_focused:
             # Blink cursor (using time-based blinking)
             cursor_visible = (pg.time.get_ticks() // 500) % 2 == 0
-            
+
             if cursor_visible:
                 # Calculate cursor position
                 text_before_cursor = self.text[:self.cursor_pos]
-                cursor_x = text_x + render_context.font.size(text_before_cursor)[0]
-                
+                cursor_x = text_x + self.font.size(text_before_cursor)[0]
+
                 cursor_height = self.rect.height - 2 * padding
                 cursor_top = self.rect.top + padding
-                
+
                 # Draw cursor line
                 pg.draw.line(
                     screen,
