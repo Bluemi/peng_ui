@@ -8,7 +8,7 @@ from peng_ui.viewer import Viewer
 
 class MyViewer(Viewer):
     def __init__(self):
-        super().__init__()
+        super().__init__(screen_size=(0, 0), flags=pg.FULLSCREEN)
         self.button = Button(pg.Rect(50, 50, 120, 40), "hello")
         self.label = Label(pg.Rect(50, 100, 120, 40), "hello")
         self.edit_field = EditField(pg.Rect(200, 50, 220, 40), "hello")

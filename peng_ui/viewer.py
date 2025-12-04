@@ -8,9 +8,9 @@ from peng_ui.utils import RenderContext
 
 
 class Viewer:
-    def __init__(self, screen_size: Tuple[int, int] = (800, 600), title: str = "Window"):
+    def __init__(self, title: str = "Window", screen_size: Tuple[int, int] = (800, 600), flags: int = 0):
         pg.init()
-        self.screen = pg.display.set_mode(screen_size)
+        self.screen = pg.display.set_mode(screen_size, flags)
         pg.scrap.init()
         pg.display.set_caption(title)
         self.running = True
