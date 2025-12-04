@@ -1,5 +1,3 @@
-# peng_ui
+# peng-ui
 
-Template for python projects.
-
-Execute `init-project.sh "<your project name>"` to name everything correctly.
+Simple ui elements to use in pygame context.
