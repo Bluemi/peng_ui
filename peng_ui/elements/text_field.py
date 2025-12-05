@@ -496,7 +496,7 @@ class TextField(BaseElement):
 
     def _insert_text(self, char: str):
         """Insert a character at the cursor position."""
-        self._delete_selection()  # TODO
+        self._delete_selection()
 
         # insert text
         paragraph = self._get_paragraph(self.cursor)
