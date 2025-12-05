@@ -713,64 +713,6 @@ class TextField(BaseElement):
 
                 y_pos += self.line_height
 
-
-
-                '''
-                # Draw selection highlight for this line
-                if self.selection_start is not None and self.is_focused:
-                    sel_start, sel_end = self._get_selection_range()
-                    if sel_start < line_end_pos and sel_end > line_start_pos:
-                        # Calculate selection within this wrapped line
-                        line_sel_start = max(0, sel_start - line_start_pos)
-                        line_sel_end = min(len(line_text), sel_end - line_start_pos)
-
-                        before_width = self.font.size(line_text[:line_sel_start])[0]
-                        sel_width = self.font.size(line_text[line_sel_start:line_sel_end])[0]
-
-                        selection_rect = pg.Rect(
-                            text_area.left + before_width,
-                            y_pos,
-                            sel_width,
-                            self.line_height
-                        )
-                        pg.draw.rect(screen, (100, 150, 200), selection_rect)
-
-                '''
-
-        '''
-        elif not self.is_focused and self.placeholder:
-            # Draw placeholder with wrapping
-            placeholder_wrapped = self._wrap_text(self.placeholder, text_area.width)
-            placeholder_color = (100, 100, 100)
-            for i, line in enumerate(placeholder_wrapped[:visible_lines]):
-                y_pos = text_area.top + i * self.line_height
-                placeholder_surface = self.font.render(line, True, placeholder_color)
-                screen.blit(placeholder_surface, (text_area.left, y_pos))
-        '''
-
-        '''
-        # Draw cursor if focused
-        if self.is_focused:
-            cursor_visible = (pg.time.get_ticks() // 500) % 2 == 0
-
-            if cursor_visible:
-                cursor_line, cursor_col = self._get_cursor_line_col_wrapped()
-
-                # Only draw cursor if it's in the visible area
-                if self.scroll_offset <= cursor_line < self.scroll_offset + visible_lines:
-                    line_text = wrapped_lines[cursor_line] if cursor_line < len(wrapped_lines) else ""
-                    cursor_x = text_area.left + self.font.size(line_text[:cursor_col])[0]
-                    cursor_y = text_area.top + (cursor_line - self.scroll_offset) * self.line_height
-
-                    pg.draw.line(
-                        screen,
-                        self.text_color,
-                        (cursor_x, cursor_y),
-                        (cursor_x, cursor_y + self.line_height),
-                        2
-                    )
-        '''
-
         # Restore clip rect
         screen.set_clip(clip_rect)
 
