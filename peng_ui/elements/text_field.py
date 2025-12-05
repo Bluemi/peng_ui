@@ -594,11 +594,15 @@ class TextField(BaseElement):
         visible_lines = max(1, int(text_area.height / self.line_height))
 
         # Draw text or placeholder
-        y_pos = text_area.top
-        for line in self.text:
-            for paragraph in line.paragraphs:
+        y_pos = text_area.top + self.padding
+        for line_index, line in enumerate(self.text):
+            for paragraph_index, paragraph in enumerate(line.paragraphs):
                 text_surface = self.font.render(paragraph, True, self.text_color)
                 screen.blit(text_surface, (text_area.left, y_pos))
+
+                # draw cursor
+                self.draw_cursor(screen, line_index, paragraph, paragraph_index, y_pos, text_area)
+
                 y_pos += self.line_height
 
                 '''
@@ -659,3 +663,10 @@ class TextField(BaseElement):
 
         # Restore clip rect
         screen.set_clip(clip_rect)
+
+    def draw_cursor(self, screen: pg.Surface, line_index: int, paragraph: str, paragraph_index: int, y_pos: int, text_area: pg.Rect):
+        cursor_visible = (pg.time.get_ticks() // 500) % 2 == 0
+        if cursor_visible:
+            if self.cursor.line_index == line_index and self.cursor.paragraph_index == paragraph_index:
+                x_pos = text_area.left + self.font.size(paragraph[:self.cursor.char_index])[0]
+                pg.draw.line(screen, self.text_color, (x_pos, y_pos), (x_pos, y_pos + self.line_height), 2)
