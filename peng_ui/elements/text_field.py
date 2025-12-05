@@ -357,9 +357,9 @@ class TextField(BaseElement):
                 elif event.key == pg.K_DELETE:
                     self._delete_direction(1, ctrl_pressed)
                 elif event.key == pg.K_LEFT:
-                    self._move_my_cursor(-1, ctrl_pressed)
+                    self._move_my_cursor(-1, ctrl_pressed, shift_pressed)
                 elif event.key == pg.K_RIGHT:
-                    self._move_my_cursor(1, ctrl_pressed)
+                    self._move_my_cursor(1, ctrl_pressed, shift_pressed)
                 # elif event.key == pg.K_UP:
                 #     self._move_cursor_up(shift_pressed)
                 # elif event.key == pg.K_DOWN:
@@ -422,8 +422,10 @@ class TextField(BaseElement):
         else:
             raise ValueError("Invalid direction")
 
-    def _move_my_cursor(self, direction: int, jump_words: bool = False):
+    def _move_my_cursor(self, direction: int, jump_words: bool = False, select: bool = False):
         """Move the cursor in the direction given by the given direction."""
+        if select and self.selection_start is None:
+            self.selection_start = self.cursor.copy()
         self._move_cursor(self.cursor, direction, jump_words)
         self._update_scroll()
 
@@ -588,10 +590,13 @@ class TextField(BaseElement):
 
     def _delete_direction(self, direction: int, jump_words: bool = False):
         """Remove a character in the given direction."""
-        target_cursor = self.cursor.copy()
-        self._move_cursor(target_cursor, direction, jump_words)
-        self._delete(self.cursor, target_cursor)
-        self.cursor = min(target_cursor, self.cursor)
+        if self.selection_start is not None:
+            self._delete_selection()
+        else:
+            target_cursor = self.cursor.copy()
+            self._move_cursor(target_cursor, direction, jump_words)
+            self._delete(self.cursor, target_cursor)
+            self.cursor = min(target_cursor, self.cursor)
 
     def _get_selection_range(self) -> Tuple[Cursor, Cursor]:
         """Get the start and end of the current selection (ordered)."""
