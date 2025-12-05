@@ -12,20 +12,24 @@ class Label(BaseElement):
             bg_color: Optional[ColorType] = None
     ):
         super().__init__(rect)
-        self.text = text
+        self._text = text
         self.text_color = text_color
         self.bg_color = bg_color
-        self.text_surface: Optional[pg.Surface] = None
+        self._text_surface: Optional[pg.Surface] = None
 
     def handle_event(self, event: pg.event.Event):
         super().handle_event(event)
+
+    def set_text(self, text: str):
+        self._text = text
+        self._text_surface = None
 
     def draw(self, screen: pg.Surface, render_context: RenderContext):
         if self.bg_color:
             pg.draw.rect(screen, self.bg_color, self.rect)
 
-        if self.text:
-            if self.text_surface is None:
-                self.text_surface = render_context.font.render(self.text, True, self.text_color)
-                self.rect = self.text_surface.get_rect(center=self.rect.center)
-            screen.blit(self.text_surface, self.rect)
+        if self._text:
+            if self._text_surface is None:
+                self._text_surface = render_context.font.render(self._text, True, self.text_color)
+                self.rect = self._text_surface.get_rect(center=self.rect.center)
+            screen.blit(self._text_surface, self.rect)
