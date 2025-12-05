@@ -17,6 +17,9 @@ dependencies = [
 	"pygame>=2.6"
 ]
 
+[project.urls]
+Repository = "https://github.com/Bluemi/peng_ui"
+
 [project.optional-dependencies]
 dev = ["pytest", "build", "twine"]
 
