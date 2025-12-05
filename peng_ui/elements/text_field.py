@@ -209,7 +209,7 @@ class TextField(BaseElement):
             text_color: ColorType = (200, 200, 200)
     ):
         super().__init__(rect)
-        self.lines: List[Line] = [Line(t) for t in text.split('\n')]
+        self.lines: List[Line] = []
         self.placeholder = placeholder
 
         self.bg_color = bg_color
@@ -229,6 +229,10 @@ class TextField(BaseElement):
         self.font = load_font()
         self.line_height = self.font.get_height() if self.font else 20
 
+        self.set_text(text)
+
+    def set_text(self, text: str):
+        self.lines = [Line(l) for l in text.split('\n')]
         self._wrap_text()
 
     def end_cursor(self) -> Cursor:

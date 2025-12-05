@@ -16,7 +16,7 @@ class MyViewer(Viewer):
 
     def tick(self):
         if self.button.is_clicked:
-            print('button clicked')
+            self.text_field.set_text(self.edit_field.text)
         if self.label.is_clicked:
             print('label clicked')
 
