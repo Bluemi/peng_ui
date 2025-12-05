@@ -67,7 +67,8 @@ class Line:
         self.paragraphs: List[str] = text
 
     def __repr__(self):
-        return f'Line({len(self.paragraphs)} paragraphs, {self.num_chars()} chars)'
+        # return f'Line({len(self.paragraphs)} paragraphs, {self.num_chars()} chars)'
+        return str(self.paragraphs)
 
     def get_line_char_index(self, paragraph_index: int, char_index: int) -> int:
         """
@@ -457,7 +458,7 @@ class TextField(BaseElement):
                     return
                 if new_paragraph_index < 0:
                     new_paragraph_index = self.lines[new_line_index].num_paragraphs() - 1
-                if new_paragraph_index >= current_line.num_paragraphs():
+                elif new_paragraph_index >= current_line.num_paragraphs():
                     new_paragraph_index = 0
         if wrap_forward:
             new_char_index = 0
@@ -628,9 +629,9 @@ class TextField(BaseElement):
             line.delete(start, end)
             line.auto_wrap(self.font, max_width)
         else:
-            new_lines = self.lines[:start.line_index]
+            new_lines = self.lines[:start.line_index].copy()
 
-            last_start_line = self.lines[end.line_index]
+            last_start_line = self.lines[start.line_index]
             last_start_line.delete(start, last_start_line.end())
 
             first_end_line = self.lines[end.line_index]
