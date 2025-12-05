@@ -424,8 +424,7 @@ class TextField(BaseElement):
 
     def _move_my_cursor(self, direction: int, jump_words: bool = False, select: bool = False):
         """Move the cursor in the direction given by the given direction."""
-        if select and self.selection_start is None:
-            self.selection_start = self.cursor.copy()
+        self._save_selection_start(select)
         self._move_cursor(self.cursor, direction, jump_words)
         self._update_scroll()
 
@@ -554,7 +553,7 @@ class TextField(BaseElement):
     def _save_selection_start(self, select: bool):
         if select:
             if self.selection_start is None:
-                self.selection_start = self.cursor
+                self.selection_start = self.cursor.copy()
         else:
             self.selection_start = None
 
