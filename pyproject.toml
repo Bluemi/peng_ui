@@ -5,7 +5,7 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "peng_ui"
 version = "0.3.3"
-description = "YOUR_DESCRIPTION."
+description = "Basic UI components for a Pygame environment."
 authors = [
     { name="Bruno Schilling", email="bruno.schilling@protonmail.ch" }
 ]
@@ -18,7 +18,7 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-dev = ["pytest"]
+dev = ["pytest", "build", "twine"]
 
 [tool.setuptools.packages.find]
 where = ["."]

@@ -235,6 +235,12 @@ class TextField(BaseElement):
         self.lines = [Line(l) for l in text.split('\n')]
         self._wrap_text()
 
+    def get_text(self) -> str:
+        paragraphs = []
+        for line in self.lines:
+            paragraphs.append(' '.join(p for p in line.paragraphs))
+        return '\n'.join(paragraphs)
+
     def end_cursor(self) -> Cursor:
         if not self.lines:
             return Cursor(0, 0, 0)
