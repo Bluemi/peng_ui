@@ -24,6 +24,25 @@ class Line:
     def __init__(self, text: str = ''):
         self.paragraphs: List[str] = [text]
 
+    def get_line_char_index(self, paragraph_index: int, char_index: int) -> int:
+        """
+        Returns the character index, if all paragraphs would be in a single string.
+        """
+        return sum(len(p) for p in self.paragraphs[:paragraph_index]) + char_index
+
+    def auto_wrap_and_norm_cursor(self, font: pg.font.Font, max_width: int, cursor: Cursor, this_line_index: int):
+        """
+        Wraps the line to fit within the given max width.
+
+        :param font: The font to use for wrapping.
+        :param max_width: The maximum width to wrap the line to.
+        :param cursor: A cursor object, that will be handled correctly, if wrapping occurs at the cursor position. It is
+            assumed, that the cursor points to the current line.
+        :returns: The given cursor. If a wrap happens the returned cursor will point to the same character possibly in
+            a different paragraph.
+        """
+        line_char_index = self.get_line_char_index(cursor.paragraph_index, cursor.char_index)
+
     def auto_wrap(self, font: pg.font.Font, max_width: int):
         words = ' '.join(self.paragraphs).split(' ')
         current_line = ''
