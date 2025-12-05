@@ -318,8 +318,6 @@ class TextField(BaseElement):
                 cursor = self._cursor_from_mouse_pos(event.pos)
                 if cursor is not None:
                     self.cursor = cursor
-                else:
-                    print('cursor is None')
                 self.selection_start = self.cursor
                 self.mouse_down = True
             else:
@@ -333,8 +331,6 @@ class TextField(BaseElement):
                     cursor = self._cursor_from_mouse_pos(event.pos)
                     if cursor is not None:
                         self.cursor = cursor
-                    else:
-                        print('cursor is None')
 
         # Handle mouse button up - finish selection
         if event.type == pg.MOUSEBUTTONUP and event.button == 1:
@@ -351,8 +347,8 @@ class TextField(BaseElement):
         # Handle keyboard input only if focused
         if self.is_focused:
             if event.type == pg.KEYDOWN:
-                ctrl_pressed = event.mod & pg.KMOD_CTRL
-                shift_pressed = event.mod & pg.KMOD_SHIFT
+                ctrl_pressed = bool(event.mod & pg.KMOD_CTRL)
+                shift_pressed = bool(event.mod & pg.KMOD_SHIFT)
 
                 if event.key == pg.K_RETURN:
                     self._create_newline()
@@ -440,28 +436,26 @@ class TextField(BaseElement):
         wrap_forward = False
         new_line_index = cursor.line_index
         new_paragraph_index = cursor.paragraph_index
-        new_char_index = cursor.char_index
-        if not jump_words:
-            new_char_index = TextField._next_char_index(
-                self._get_paragraph(cursor), cursor.char_index, direction, jump_words
-            )
-            if new_char_index < 0 or new_char_index > len(self._get_paragraph(cursor)):
-                wrap_back = new_char_index < 0
-                wrap_forward = new_char_index > len(self._get_paragraph(cursor))
-                new_paragraph_index = cursor.paragraph_index + direction
-                current_line = self._get_line(cursor)
-                if new_paragraph_index < 0 or new_paragraph_index >= current_line.num_paragraphs():
-                    new_line_index = cursor.line_index + direction
-                    if new_line_index < 0 or new_line_index >= len(self.lines):
-                        return
-                    if new_paragraph_index < 0:
-                        new_paragraph_index = self.lines[new_line_index].num_paragraphs() - 1
-                    if new_paragraph_index >= current_line.num_paragraphs():
-                        new_paragraph_index = 0
-            if wrap_forward:
-                new_char_index = 0
-            if wrap_back:
-                new_char_index = len(self._get_paragraph((new_line_index, new_paragraph_index)))
+        new_char_index = TextField._next_char_index(
+            self._get_paragraph(cursor), cursor.char_index, direction, jump_words
+        )
+        if new_char_index < 0 or new_char_index > len(self._get_paragraph(cursor)):
+            wrap_back = new_char_index < 0
+            wrap_forward = new_char_index > len(self._get_paragraph(cursor))
+            new_paragraph_index = cursor.paragraph_index + direction
+            current_line = self._get_line(cursor)
+            if new_paragraph_index < 0 or new_paragraph_index >= current_line.num_paragraphs():
+                new_line_index = cursor.line_index + direction
+                if new_line_index < 0 or new_line_index >= len(self.lines):
+                    return
+                if new_paragraph_index < 0:
+                    new_paragraph_index = self.lines[new_line_index].num_paragraphs() - 1
+                if new_paragraph_index >= current_line.num_paragraphs():
+                    new_paragraph_index = 0
+        if wrap_forward:
+            new_char_index = 0
+        if wrap_back:
+            new_char_index = len(self._get_paragraph((new_line_index, new_paragraph_index)))
 
         cursor.line_index = new_line_index
         cursor.paragraph_index = new_paragraph_index
@@ -598,32 +592,6 @@ class TextField(BaseElement):
         self._move_cursor(target_cursor, direction, jump_words)
         self._delete(self.cursor, target_cursor)
         self.cursor = min(target_cursor, self.cursor)
-
-    def _handle_backspace(self, ctrl_pressed: bool = False):
-        """Handle backspace key."""
-        # if not self._delete_selection():
-        if ctrl_pressed:
-            new_pos = self._find_word_start(self.cursor)
-            if new_pos < self.cursor:
-                self.lines = self.lines[:new_pos] + self.lines[self.cursor:]
-                self.cursor = new_pos
-        elif self.cursor > 0:
-            self.lines = self.lines[:self.cursor - 1] + self.lines[self.cursor:]
-            self.cursor -= 1
-        self._update_scroll()
-
-    '''
-    def _handle_delete(self, ctrl_pressed: bool = False):
-        """Handle delete key."""
-        if not self._delete_selection():
-            if ctrl_pressed:
-                new_pos = self._find_word_end(self.cursor)
-                if new_pos > self.cursor:
-                    self.text = self.text[:self.cursor] + self.text[new_pos:]
-            elif self.cursor < len(self.text):
-                self.text = self.text[:self.cursor] + self.text[self.cursor + 1:]
-        self._update_scroll()
-    '''
 
     def _get_selection_range(self) -> Tuple[Cursor, Cursor]:
         """Get the start and end of the current selection (ordered)."""
