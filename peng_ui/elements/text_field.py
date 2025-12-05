@@ -364,10 +364,10 @@ class TextField(BaseElement):
                 #     self._move_cursor_up(shift_pressed)
                 # elif event.key == pg.K_DOWN:
                 #     self._move_cursor_down(shift_pressed)
-                # elif event.key == pg.K_HOME:
-                #     self._move_cursor_home(shift_pressed, ctrl_pressed)
-                # elif event.key == pg.K_END:
-                #     self._move_cursor_end(shift_pressed, ctrl_pressed)
+                elif event.key == pg.K_HOME:
+                    self._move_cursor_home(shift_pressed, ctrl_pressed)
+                elif event.key == pg.K_END:
+                    self._move_cursor_end(shift_pressed, ctrl_pressed)
                 # elif event.key == pg.K_a and ctrl_pressed:
                 #     self._select_all()
                 # elif event.key == pg.K_c and ctrl_pressed:
@@ -536,42 +536,40 @@ class TextField(BaseElement):
         if not shift_pressed:
             self.selection_start = None
         self._update_scroll()
+    '''
 
-    def _move_cursor_home(self, shift_pressed: bool, ctrl_pressed: bool):
+    def _move_cursor_home(self, select: bool, ctrl_pressed: bool):
         """Move cursor to start of line or start of text."""
-        if shift_pressed and self.selection_start is None:
-            self.selection_start = self.cursor
+        self._save_selection_start(select)
 
         if ctrl_pressed:
             # Move to start of text
-            self.cursor = 0
+            self.cursor = Cursor(0, 0, 0)
         else:
             # Move to start of current wrapped line
-            line, _ = self._get_cursor_line_col_wrapped()
-            self.cursor = self._get_pos_from_wrapped_line_col(line, 0)
+            self.cursor.char_index = 0
 
-        if not shift_pressed:
-            self.selection_start = None
         self._update_scroll()
 
-    def _move_cursor_end(self, shift_pressed: bool, ctrl_pressed: bool):
+    def _save_selection_start(self, select: bool):
+        if select:
+            if self.selection_start is None:
+                self.selection_start = self.cursor
+        else:
+            self.selection_start = None
+
+    def _move_cursor_end(self, select: bool, ctrl_pressed: bool):
         """Move cursor to end of line or end of text."""
-        if shift_pressed and self.selection_start is None:
-            self.selection_start = self.cursor
+        self._save_selection_start(select)
 
         if ctrl_pressed:
             # Move to end of text
-            self.cursor = len(self.text)
+            self.cursor = self.end_cursor()
         else:
             # Move to end of current wrapped line
-            line, _ = self._get_cursor_line_col_wrapped()
-            wrapped_lines = self.text
-            self.cursor = self._get_pos_from_wrapped_line_col(line, len(wrapped_lines[line]))
+            self.cursor.char_index = len(self._get_paragraph(self.cursor))
 
-        if not shift_pressed:
-            self.selection_start = None
         self._update_scroll()
-    '''
 
     def _clamp_cursor(self, cursor: Cursor) -> Cursor:
         """Ensure cursor is within valid bounds."""
