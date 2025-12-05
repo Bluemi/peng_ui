@@ -699,15 +699,21 @@ class TextField(BaseElement):
 
         # Draw text or placeholder
         y_pos = text_area.top + self.padding
+        selection_start, selection_end = self._get_selection_range()
         for line_index, line in enumerate(self.lines):
             for paragraph_index, paragraph in enumerate(line.paragraphs):
+                self._draw_selection(
+                    line_index, paragraph, paragraph_index, screen, selection_end, selection_start, text_area, y_pos
+                )
+
                 text_surface = self.font.render(paragraph, True, self.text_color)
                 screen.blit(text_surface, (text_area.left, y_pos))
 
-                # draw cursor
                 self.draw_cursor(screen, line_index, paragraph, paragraph_index, y_pos, text_area)
 
                 y_pos += self.line_height
+
+
 
                 '''
                 # Draw selection highlight for this line
@@ -768,9 +774,33 @@ class TextField(BaseElement):
         # Restore clip rect
         screen.set_clip(clip_rect)
 
+    def _draw_selection(
+            self, line_index: int, paragraph: str, paragraph_index: int, screen: pg.Surface, selection_end: Cursor,
+            selection_start: Cursor, text_area: pg.Rect, y_pos: int
+    ):
+        if self.selection_start is not None:
+            if selection_start.line_index <= line_index <= selection_end.line_index and \
+                    selection_start.paragraph_index <= paragraph_index <= selection_end.paragraph_index:
+                start_char_index = 0
+                if selection_start.line_index == line_index and selection_start.paragraph_index == paragraph_index:
+                    start_char_index = selection_start.char_index
+
+                end_char_index = len(paragraph)
+                if selection_end.line_index == line_index and selection_end.paragraph_index == paragraph_index:
+                    end_char_index = selection_end.char_index
+
+                highlight_offset = self.font.size(paragraph[:start_char_index])[0]
+                highlight_width = self.font.size(paragraph[start_char_index:end_char_index])[0]
+                selection_rect = pg.Rect(
+                    text_area.left + highlight_offset, y_pos,
+                    highlight_width, self.line_height
+                )
+                pg.draw.rect(screen, (100, 150, 200), selection_rect)
+
     def draw_cursor(self, screen: pg.Surface, line_index: int, paragraph: str, paragraph_index: int, y_pos: int, text_area: pg.Rect):
-        cursor_visible = (pg.time.get_ticks() // 500) % 2 == 0
-        if cursor_visible:
-            if self.cursor.line_index == line_index and self.cursor.paragraph_index == paragraph_index:
-                x_pos = text_area.left + self.font.size(paragraph[:self.cursor.char_index])[0]
-                pg.draw.line(screen, self.text_color, (x_pos, y_pos), (x_pos, y_pos + self.line_height), 2)
+        if self.is_focused:
+            cursor_visible = (pg.time.get_ticks() // 500) % 2 == 0
+            if cursor_visible:
+                if self.cursor.line_index == line_index and self.cursor.paragraph_index == paragraph_index:
+                    x_pos = text_area.left + self.font.size(paragraph[:self.cursor.char_index])[0]
+                    pg.draw.line(screen, self.text_color, (x_pos, y_pos), (x_pos, y_pos + self.line_height), 2)
