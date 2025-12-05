@@ -742,24 +742,29 @@ class TextField(BaseElement):
             self, line_index: int, paragraph: str, paragraph_index: int, screen: pg.Surface, selection_end: Cursor,
             selection_start: Cursor, text_area: pg.Rect, y_pos: int
     ):
-        if self.selection_start is not None:
-            if selection_start.line_index <= line_index <= selection_end.line_index and \
-                    selection_start.paragraph_index <= paragraph_index <= selection_end.paragraph_index:
-                start_char_index = 0
-                if selection_start.line_index == line_index and selection_start.paragraph_index == paragraph_index:
-                    start_char_index = selection_start.char_index
+        if self.selection_start is None:
+            return
+        if line_index < selection_start.line_index or line_index > selection_end.line_index:
+            return
+        if line_index == selection_start.line_index and paragraph_index < selection_start.paragraph_index:
+            return
+        if line_index == selection_end.line_index and paragraph_index > selection_end.paragraph_index:
+            return
+        start_char_index = 0
+        if selection_start.line_index == line_index and selection_start.paragraph_index == paragraph_index:
+            start_char_index = selection_start.char_index
 
-                end_char_index = len(paragraph)
-                if selection_end.line_index == line_index and selection_end.paragraph_index == paragraph_index:
-                    end_char_index = selection_end.char_index
+        end_char_index = len(paragraph)
+        if selection_end.line_index == line_index and selection_end.paragraph_index == paragraph_index:
+            end_char_index = selection_end.char_index
 
-                highlight_offset = self.font.size(paragraph[:start_char_index])[0]
-                highlight_width = self.font.size(paragraph[start_char_index:end_char_index])[0]
-                selection_rect = pg.Rect(
-                    text_area.left + highlight_offset, y_pos,
-                    highlight_width, self.line_height
-                )
-                pg.draw.rect(screen, (100, 150, 200), selection_rect)
+        highlight_offset = self.font.size(paragraph[:start_char_index])[0]
+        highlight_width = self.font.size(paragraph[start_char_index:end_char_index])[0]
+        selection_rect = pg.Rect(
+            text_area.left + highlight_offset, y_pos,
+            highlight_width, self.line_height
+        )
+        pg.draw.rect(screen, (100, 150, 200), selection_rect)
 
     def draw_cursor(self, screen: pg.Surface, line_index: int, paragraph: str, paragraph_index: int, y_pos: int, text_area: pg.Rect):
         if self.is_focused:
