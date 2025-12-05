@@ -8,11 +8,23 @@ from peng_ui.utils import RenderContext, ColorType, load_font
 SCRAP_TEXT = 'text/plain;charset=utf-8'
 
 
+'''
+Consider the following paragraphs
+paragraphs = [
+    "123", "456"
+]
+cursor at the start of the first paragraph _123: Cursor(x, 0, 0)
+cursor at the start of the first paragraph 123_: Cursor(x, 3, 0)
+the length of a paragraph is the string length + 1.
+'''
 class Cursor:
     def __init__(self, line_index: int, paragraph_index: int, char_index: int):
         self.line_index = line_index
         self.paragraph_index = paragraph_index
         self.char_index = char_index
+
+    def __repr__(self):
+        return f'Cursor({self.line_index}, {self.paragraph_index}, {self.char_index})'
 
 
 class Line:
@@ -24,13 +36,16 @@ class Line:
     def __init__(self, text: str = ''):
         self.paragraphs: List[str] = [text]
 
+    def __repr__(self):
+        return f'Line({len(self.paragraphs)} paragraphs, {self.num_chars()} chars)'
+
     def get_line_char_index(self, paragraph_index: int, char_index: int) -> int:
         """
         Returns the character index, if all paragraphs would be in a single string.
         """
-        return sum(len(p) for p in self.paragraphs[:paragraph_index]) + char_index
+        return sum(len(p) + 1 for p in self.paragraphs[:paragraph_index]) + char_index
 
-    def auto_wrap_and_norm_cursor(self, font: pg.font.Font, max_width: int, cursor: Cursor, this_line_index: int):
+    def auto_wrap_and_norm_cursor(self, font: pg.font.Font, max_width: int, cursor: Cursor):
         """
         Wraps the line to fit within the given max width.
 
@@ -42,6 +57,19 @@ class Line:
             a different paragraph.
         """
         line_char_index = self.get_line_char_index(cursor.paragraph_index, cursor.char_index)
+        self.auto_wrap(font, max_width)
+        new_cursor = Cursor(cursor.line_index, cursor.paragraph_index, line_char_index)
+        new_cursor.paragraph_index, new_cursor.char_index = self.get_paragraph_char_index(line_char_index)
+        return new_cursor
+
+    def get_paragraph_char_index(self, line_char_index: int) -> Tuple[int, int]:
+        cum_char_sum = 0
+        for i, p in enumerate(self.paragraphs):
+            p_chars = len(p) + 1  # every paragraph ends with a virtual extra character
+            if line_char_index < cum_char_sum + p_chars:
+                return i, line_char_index - cum_char_sum
+            cum_char_sum += p_chars  # TODO: +1?
+        return len(self.paragraphs) - 1, 0
 
     def auto_wrap(self, font: pg.font.Font, max_width: int):
         words = ' '.join(self.paragraphs).split(' ')
@@ -140,13 +168,16 @@ class TextField(BaseElement):
         Wrap text to fit within max_width, breaking at word boundaries.
         """
         max_width = self.rect.width - 2 * self.padding
-        for line in self.text:
-            line.auto_wrap(self.font, max_width)
+        for line_index, line in enumerate(self.text):
+            if line_index == self.cursor.line_index:
+                self.cursor = line.auto_wrap_and_norm_cursor(self.font, max_width, self.cursor)
+            else:
+                line.auto_wrap(self.font, max_width)
 
     def _cursor_from_mouse_pos(self, mouse_pos: Tuple[int, int]) -> Optional[Cursor]:
         """Calculate the character index in text based on mouse position."""
         if not self.rect.collidepoint(*mouse_pos):
-            return None
+            return self.end_cursor()
 
         if not self.text:
             return Cursor(0, 0, 0)
@@ -157,7 +188,7 @@ class TextField(BaseElement):
         # Calculate line index based on Y position and scroll
         line_par = self._get_line_and_paragraph_by_y(rel_y)
         if line_par is None:
-            return None
+            return self.end_cursor()
         line_index, paragraph_index = line_par
 
         line = self.text[line_index]
