@@ -1,4 +1,4 @@
-from typing import Optional, Tuple, List, Union
+from typing import Optional, Tuple, List, Union, Iterable
 
 import pygame as pg
 
@@ -368,14 +368,14 @@ class TextField(BaseElement):
                     self._move_cursor_home(shift_pressed, ctrl_pressed)
                 elif event.key == pg.K_END:
                     self._move_cursor_end(shift_pressed, ctrl_pressed)
-                # elif event.key == pg.K_a and ctrl_pressed:
-                #     self._select_all()
-                # elif event.key == pg.K_c and ctrl_pressed:
-                #     self._copy_to_clipboard()
-                # elif event.key == pg.K_v and ctrl_pressed:
-                #     self._paste_from_clipboard()
-                # elif event.key == pg.K_x and ctrl_pressed:
-                #     self._cut_to_clipboard()
+                elif event.key == pg.K_a and ctrl_pressed:
+                    self._select_all()
+                elif event.key == pg.K_c and ctrl_pressed:
+                    self._copy_to_clipboard()
+                elif event.key == pg.K_v and ctrl_pressed:
+                    self._paste_from_clipboard()
+                elif event.key == pg.K_x and ctrl_pressed:
+                    self._cut_to_clipboard()
                 elif event.unicode and event.unicode.isprintable():
                     self._insert_text(event.unicode)
 
@@ -396,8 +396,14 @@ class TextField(BaseElement):
         orig_line = self.lines[line_index]
         left_line, right_line = orig_line.split(self.cursor.paragraph_index, self.cursor.char_index)
 
+        max_width = self.rect.width - 2 * self.padding
+        left_line.auto_wrap(self.font, max_width)
+        right_line.auto_wrap(self.font, max_width)
+
         self.lines[line_index] = left_line
         self.lines.insert(line_index + 1, right_line)
+
+        self.cursor = Cursor(line_index + 1, 0, 0)
 
     @staticmethod
     def _next_char_index(paragraph: str, char_index: int, direction: int, jump_words: bool) -> int:
@@ -489,7 +495,7 @@ class TextField(BaseElement):
 
     def _insert_text(self, char: str):
         """Insert a character at the cursor position."""
-        # self._delete_selection()  # TODO
+        self._delete_selection()  # TODO
 
         # insert text
         paragraph = self._get_paragraph(self.cursor)
@@ -639,34 +645,52 @@ class TextField(BaseElement):
             self.lines = new_lines
         self.cursor = self._clamp_cursor(start)
 
-    '''
     def _select_all(self):
         """Select all text."""
-        self.selection_start = 0
-        self.cursor = len(self.text)
+        self.selection_start = Cursor(0, 0, 0)
+        self.cursor = self.end_cursor()
 
     def _copy_to_clipboard(self):
         """Copy selected text to clipboard."""
         start, end = self._get_selection_range()
         if start != end:
-            pg.scrap.put(SCRAP_TEXT, self.text[start:end].encode('utf-8'))
+            text = '\n'.join(self.iter_paragraphs(start, end))
+            pg.scrap.put(SCRAP_TEXT, text.encode('utf-8'))
+
+    def iter_paragraphs(self, start: Cursor, stop: Cursor) -> Iterable[str]:
+        """Iterate over paragraphs between start and stop cursors."""
+        for line_index in range(start.line_index, stop.line_index + 1):
+            paragraphs = self.lines[line_index].paragraphs
+            if line_index == stop.line_index:
+                paragraphs = paragraphs[:stop.paragraph_index + 1]
+            if line_index == start.line_index:
+                paragraphs = paragraphs[start.paragraph_index:]
+            for p_index, paragraph in enumerate(paragraphs):
+                if p_index == stop.paragraph_index:
+                    paragraph = paragraph[:stop.char_index]
+                if p_index == start.paragraph_index:
+                    paragraph = paragraph[start.char_index:]
+                yield paragraph
 
     def _paste_from_clipboard(self):
         """Paste text from clipboard."""
         try:
             clipboard_text = pg.scrap.get(SCRAP_TEXT).decode('utf-8')
             if clipboard_text:
-                self._insert_text(clipboard_text)
+                clipboard_text = clipboard_text.split('\n')
+                for i, line in enumerate(clipboard_text):
+                    if i == 0:
+                        self._insert_text(clipboard_text[0])
+                    elif i == len(clipboard_text) - 1:
+                        self._create_newline()
+                        self._insert_text(line)
         except pg.error:
             pass
 
     def _cut_to_clipboard(self):
         """Cut selected text to clipboard."""
-        start, end = self._get_selection_range()
-        if start != end:
-            pg.scrap.put(SCRAP_TEXT, self.text[start:end].encode('utf-8'))
-            self._delete_selection()
-    '''
+        self._copy_to_clipboard()
+        self._delete_selection()
 
     def draw(self, screen: pg.Surface, render_context: RenderContext):
         # Draw background
