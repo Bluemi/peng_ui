@@ -361,10 +361,10 @@ class TextField(BaseElement):
                     self._move_my_cursor(-1, ctrl_pressed, shift_pressed)
                 elif event.key == pg.K_RIGHT:
                     self._move_my_cursor(1, ctrl_pressed, shift_pressed)
-                # elif event.key == pg.K_UP:
-                #     self._move_cursor_up(shift_pressed)
-                # elif event.key == pg.K_DOWN:
-                #     self._move_cursor_down(shift_pressed)
+                elif event.key == pg.K_UP:
+                    self._move_my_cursor_vertical(-1, shift_pressed)
+                elif event.key == pg.K_DOWN:
+                    self._move_my_cursor_vertical(1, shift_pressed)
                 elif event.key == pg.K_HOME:
                     self._move_cursor_home(shift_pressed, ctrl_pressed)
                 elif event.key == pg.K_END:
@@ -512,37 +512,35 @@ class TextField(BaseElement):
         self.selection_start = None
         self._update_scroll()
 
-    '''
-    def _move_cursor_up(self, shift_pressed: bool):
-        """Move cursor up one line."""
-        if shift_pressed and self.selection_start is None:
-            self.selection_start = self.cursor
-
-        line, col = self._get_cursor_line_col_wrapped()
-        if line > 0:
-            wrapped_lines = self.text
-            new_col = min(col, len(wrapped_lines[line - 1]))
-            self.cursor = self._get_pos_from_wrapped_line_col(line - 1, new_col)
-
-        if not shift_pressed:
-            self.selection_start = None
+    def _move_my_cursor_vertical(self, direction: int, select: bool = False):
+        """Move the cursor vertically in the direction given by the given direction."""
+        self._save_selection_start(select)
+        self.cursor = self._move_cursor_vertical(self.cursor, direction)
         self._update_scroll()
 
-    def _move_cursor_down(self, shift_pressed: bool):
-        """Move cursor down one line."""
-        if shift_pressed and self.selection_start is None:
-            self.selection_start = self.cursor
+    def _move_cursor_vertical(self, cursor: Cursor, direction: int) -> Cursor:
+        new_paragraph_index = cursor.paragraph_index + direction
+        new_line_index = cursor.line_index
+        new_char_index = cursor.char_index
 
-        line, col = self._get_cursor_line_col_wrapped()
-        wrapped_lines = self.text
-        if line < len(wrapped_lines) - 1:
-            new_col = min(col, len(wrapped_lines[line + 1]))
-            self.cursor = self._get_pos_from_wrapped_line_col(line + 1, new_col)
+        if new_paragraph_index < 0 or new_paragraph_index >= self._get_line(cursor).num_paragraphs():
+            new_line_index += direction
+            if new_line_index < 0:
+                new_line_index = 0
+                new_paragraph_index = 0
+                new_char_index = 0
+            elif new_line_index >= len(self.lines):
+                new_line_index = len(self.lines) - 1
+                new_paragraph_index = self.lines[new_line_index].num_paragraphs() - 1
+                new_char_index = len(self._get_paragraph((new_line_index, new_paragraph_index)))
+            else:
+                if new_paragraph_index < 0:
+                    new_paragraph_index = self.lines[new_line_index].num_paragraphs() - 1
+                elif new_paragraph_index >= self._get_line(cursor).num_paragraphs():
+                    new_paragraph_index = 0
 
-        if not shift_pressed:
-            self.selection_start = None
-        self._update_scroll()
-    '''
+        return self._clamp_cursor(Cursor(new_line_index, new_paragraph_index, new_char_index))
+
 
     def _move_cursor_home(self, select: bool, ctrl_pressed: bool):
         """Move cursor to start of line or start of text."""

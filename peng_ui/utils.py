@@ -29,3 +29,7 @@ def load_font():
         warnings.warn("Warning: Could not load default font. Text will not be rendered.")
         font = None
     return font
+
+
+def clamp(n, minn, maxn):
+    return max(min(maxn, n), minn)
