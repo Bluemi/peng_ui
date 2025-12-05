@@ -201,13 +201,11 @@ class Line:
         return paragraph_index, char_index
 
 
-
-
 class TextField(BaseElement):
     def __init__(
             self, rect: pg.Rect, text: str = "", placeholder: str = "",
-            bg_color: ColorType = (40, 40, 40), hover_color: ColorType = (60, 60, 60),
-            clicked_color: ColorType = (90, 90, 100), border_color: ColorType = (140, 140, 140),
+            bg_color: ColorType = (40, 40, 40), hover_color: ColorType = (50, 50, 50),
+            clicked_color: ColorType = (60, 60, 60), border_color: ColorType = (120, 120, 120),
             text_color: ColorType = (200, 200, 200)
     ):
         super().__init__(rect)
