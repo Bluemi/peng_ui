@@ -156,7 +156,7 @@ class Line:
         middle_paragraph = self.paragraphs[paragraph_index]
         left_part = middle_paragraph[:split_index]
         right_part = middle_paragraph[split_index:]
-        left_paragraphs.append(left_part)
+        left_paragraphs.append(' ' + left_part)
         right_paragraphs.insert(0, right_part)
         return Line(''.join(left_paragraphs)), Line(''.join(right_paragraphs))
 
