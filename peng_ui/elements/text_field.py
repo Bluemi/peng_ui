@@ -23,8 +23,36 @@ class Cursor:
         self.paragraph_index = paragraph_index
         self.char_index = char_index
 
+    @staticmethod
+    def from_tuple(paragraph_index: int, char_index: int):
+        return Cursor(-1, paragraph_index, char_index)
+
+    def copy(self) -> 'Cursor':
+        return Cursor(self.line_index, self.paragraph_index, self.char_index)
+
     def __repr__(self):
         return f'Cursor({self.line_index}, {self.paragraph_index}, {self.char_index})'
+
+    def __eq__(self, other):
+        return self.line_index == other.line_index and self.paragraph_index == other.paragraph_index and self.char_index == other.char_index
+
+    def __ne__(self, other):
+        return not self.__eq__(other)
+
+    def __lt__(self, other):
+        if self.line_index == other.line_index:
+            if self.paragraph_index == other.paragraph_index:
+                return self.char_index < other.char_index
+            else:
+                return self.paragraph_index < other.paragraph_index
+        else:
+            return self.line_index < other.line_index
+
+    def __gt__(self, other):
+        return self.__ne__(other) and not self.__lt__(other)
+
+
+CursorOrTuple = Union[Cursor, Tuple[int, int]]
 
 
 class Line:
@@ -33,8 +61,10 @@ class Line:
     Each manual enter from the user will create a new Line object. Each line that is longer than the width of the
     TextField will create a new paragraph.
     """
-    def __init__(self, text: str = ''):
-        self.paragraphs: List[str] = [text]
+    def __init__(self, text: Union[str, List[str]] = ''):
+        if isinstance(text, str):
+            text = [text]
+        self.paragraphs: List[str] = text
 
     def __repr__(self):
         return f'Line({len(self.paragraphs)} paragraphs, {self.num_chars()} chars)'
@@ -71,8 +101,14 @@ class Line:
             cum_char_sum += p_chars  # TODO: +1?
         return len(self.paragraphs) - 1, 0
 
+    def word_list(self) -> List[str]:
+        word_list = []
+        for p in self.paragraphs:
+            word_list.extend(p.split(' '))
+        return word_list
+
     def auto_wrap(self, font: pg.font.Font, max_width: int):
-        words = ' '.join(self.paragraphs).split(' ')
+        words = self.word_list()
         current_line = ''
         new_paragraphs = []
 
@@ -100,6 +136,7 @@ class Line:
             new_paragraphs.append(current_line)
 
         self.paragraphs = new_paragraphs
+        self.ensure_paragraph()
 
     def num_paragraphs(self) -> int:
         return len(self.paragraphs)
@@ -123,6 +160,47 @@ class Line:
         right_paragraphs.insert(0, right_part)
         return Line(''.join(left_paragraphs)), Line(''.join(right_paragraphs))
 
+    @staticmethod
+    def _remove_from_paragraph(paragraph: str, start: int, end: int) -> str:
+        return paragraph[:start] + paragraph[end:]
+
+    def delete(self, start: CursorOrTuple, end: CursorOrTuple):
+        if isinstance(start, tuple):
+            start = Cursor.from_tuple(*start)
+        if isinstance(end, tuple):
+            end = Cursor.from_tuple(*end)
+
+        if start.paragraph_index == end.paragraph_index:
+            p = self.paragraphs[start.paragraph_index]
+            self.paragraphs[start.paragraph_index] = p[:start.char_index] + p[end.char_index:]
+            self.ensure_paragraph()
+            return
+        before_start = self.paragraphs[:start.paragraph_index]
+        last_after_start = self.paragraphs[start.paragraph_index]
+        first_before_end = self.paragraphs[end.paragraph_index]
+        after_end = []
+        if end.paragraph_index+1 < len(self.paragraphs):
+            after_end = self.paragraphs[end.paragraph_index+1:]
+
+        new_paragraphs = before_start
+        middle_paragraph = last_after_start[:start.char_index] + first_before_end[end.char_index:]
+        if middle_paragraph:
+            new_paragraphs.append(middle_paragraph)
+        new_paragraphs.extend(after_end)
+        self.paragraphs = new_paragraphs
+        self.ensure_paragraph()
+
+    def ensure_paragraph(self):
+        if not self.paragraphs:
+            self.paragraphs = ['']
+
+    def end(self) -> Tuple[int, int]:
+        paragraph_index = len(self.paragraphs) - 1
+        char_index = len(self.paragraphs[-1])
+        return paragraph_index, char_index
+
+
+
 
 class TextField(BaseElement):
     def __init__(
@@ -132,7 +210,7 @@ class TextField(BaseElement):
             text_color: ColorType = (200, 200, 200)
     ):
         super().__init__(rect)
-        self.text: List[Line] = [Line(t) for t in text.split('\n')]
+        self.lines: List[Line] = [Line(t) for t in text.split('\n')]
         self.placeholder = placeholder
 
         self.bg_color = bg_color
@@ -152,11 +230,13 @@ class TextField(BaseElement):
         self.font = load_font()
         self.line_height = self.font.get_height() if self.font else 20
 
+        self._wrap_text()
+
     def end_cursor(self) -> Cursor:
-        if not self.text:
+        if not self.lines:
             return Cursor(0, 0, 0)
-        line = self.text[-1]
-        line_index = len(self.text)-1
+        line = self.lines[-1]
+        line_index = len(self.lines) - 1
         if not line.paragraphs:
             return Cursor(line_index, 0, 0)
         paragraph = line.paragraphs[-1]
@@ -168,7 +248,7 @@ class TextField(BaseElement):
         Wrap text to fit within max_width, breaking at word boundaries.
         """
         max_width = self.rect.width - 2 * self.padding
-        for line_index, line in enumerate(self.text):
+        for line_index, line in enumerate(self.lines):
             if line_index == self.cursor.line_index:
                 self.cursor = line.auto_wrap_and_norm_cursor(self.font, max_width, self.cursor)
             else:
@@ -179,7 +259,7 @@ class TextField(BaseElement):
         if not self.rect.collidepoint(*mouse_pos):
             return self.end_cursor()
 
-        if not self.text:
+        if not self.lines:
             return Cursor(0, 0, 0)
 
         rel_x = mouse_pos[0] - self.rect.x - self.padding
@@ -191,7 +271,7 @@ class TextField(BaseElement):
             return self.end_cursor()
         line_index, paragraph_index = line_par
 
-        line = self.text[line_index]
+        line = self.lines[line_index]
         paragraph = line.paragraphs[paragraph_index]
 
         # Find which paragraph the click is in based on X position
@@ -207,18 +287,18 @@ class TextField(BaseElement):
 
     def _get_view_line_pos(self, cursor: Cursor) -> int:
         view_line_pos = 0
-        for line in self.text[:cursor.line_index]:
+        for line in self.lines[:cursor.line_index]:
             view_line_pos += line.num_paragraphs()
         return view_line_pos + cursor.paragraph_index
 
     def _get_num_paragraphs(self) -> int:
-        return sum(l.num_paragraphs() for l in self.text)
+        return sum(l.num_paragraphs() for l in self.lines)
 
     def _get_line_and_paragraph_by_y(self, ypos: int) -> Optional[Tuple[int, int]]:
         view_line_index = self.scroll_offset + ypos // self.line_height
 
         start_line_index = 0
-        for line_index, line in enumerate(self.text):
+        for line_index, line in enumerate(self.lines):
             end_line_index = start_line_index + line.num_paragraphs()
             if view_line_index < end_line_index:
                 paragraph_index = view_line_index - start_line_index
@@ -276,10 +356,10 @@ class TextField(BaseElement):
 
                 if event.key == pg.K_RETURN:
                     self._create_newline()
-                # elif event.key == pg.K_BACKSPACE:
-                #     self._handle_backspace(ctrl_pressed)
-                # elif event.key == pg.K_DELETE:
-                #     self._handle_delete(ctrl_pressed)
+                elif event.key == pg.K_BACKSPACE:
+                    self._delete_direction(-1, ctrl_pressed)
+                elif event.key == pg.K_DELETE:
+                    self._delete_direction(1, ctrl_pressed)
                 elif event.key == pg.K_LEFT:
                     self._move_my_cursor(-1, ctrl_pressed)
                 elif event.key == pg.K_RIGHT:
@@ -304,24 +384,24 @@ class TextField(BaseElement):
                     self._insert_text(event.unicode)
 
     def _get_line(self, cursor: Cursor) -> Line:
-        return self.text[cursor.line_index]
+        return self.lines[cursor.line_index]
 
     def _get_paragraph(self, cursor: Union[Cursor, Tuple[int, int]]) -> str:
         if isinstance(cursor, Cursor):
             return self._get_line(cursor).paragraphs[cursor.paragraph_index]
         elif isinstance(cursor, tuple):
-            return self.text[cursor[0]].paragraphs[cursor[1]]
+            return self.lines[cursor[0]].paragraphs[cursor[1]]
         else:
             raise ValueError(f"Invalid cursor type: {type(cursor)}")
 
     def _create_newline(self):
         """Split a line into two."""
         line_index = self.cursor.line_index
-        orig_line = self.text[line_index]
+        orig_line = self.lines[line_index]
         left_line, right_line = orig_line.split(self.cursor.paragraph_index, self.cursor.char_index)
 
-        self.text[line_index] = left_line
-        self.text.insert(line_index + 1, right_line)
+        self.lines[line_index] = left_line
+        self.lines.insert(line_index + 1, right_line)
 
     @staticmethod
     def _next_char_index(paragraph: str, char_index: int, direction: int, jump_words: bool) -> int:
@@ -372,10 +452,10 @@ class TextField(BaseElement):
                 current_line = self._get_line(cursor)
                 if new_paragraph_index < 0 or new_paragraph_index >= current_line.num_paragraphs():
                     new_line_index = cursor.line_index + direction
-                    if new_line_index < 0 or new_line_index >= len(self.text):
+                    if new_line_index < 0 or new_line_index >= len(self.lines):
                         return
                     if new_paragraph_index < 0:
-                        new_paragraph_index = self.text[new_line_index].num_paragraphs() - 1
+                        new_paragraph_index = self.lines[new_line_index].num_paragraphs() - 1
                     if new_paragraph_index >= current_line.num_paragraphs():
                         new_paragraph_index = 0
             if wrap_forward:
@@ -419,7 +499,7 @@ class TextField(BaseElement):
         # insert text
         paragraph = self._get_paragraph(self.cursor)
         paragraph = paragraph[:self.cursor.char_index] + char + paragraph[self.cursor.char_index:]
-        line = self.text[self.cursor.line_index]
+        line = self.lines[self.cursor.line_index]
         line.paragraphs[self.cursor.paragraph_index] = paragraph
 
         # wrap line
@@ -495,20 +575,44 @@ class TextField(BaseElement):
         if not shift_pressed:
             self.selection_start = None
         self._update_scroll()
+    '''
+
+    def _clamp_cursor(self, cursor: Cursor) -> Cursor:
+        """Ensure cursor is within valid bounds."""
+        new_cursor = cursor.copy()
+        if new_cursor.line_index >= len(self.lines):
+            new_cursor.line_index = len(self.lines) - 1
+            new_cursor.paragraph_index = max(0, self.lines[new_cursor.line_index].num_paragraphs() - 1)
+            new_cursor.char_index = len(self._get_paragraph(new_cursor))
+        elif new_cursor.paragraph_index >= self.lines[new_cursor.line_index].num_paragraphs():
+            new_cursor.paragraph_index = self.lines[new_cursor.line_index].num_paragraphs() - 1
+            new_cursor.char_index = len(self._get_paragraph(new_cursor))
+        elif new_cursor.char_index > len(self._get_paragraph(new_cursor)):
+            new_cursor.char_index = len(self._get_paragraph(new_cursor))
+
+        return new_cursor
+
+    def _delete_direction(self, direction: int, jump_words: bool = False):
+        """Remove a character in the given direction."""
+        target_cursor = self.cursor.copy()
+        self._move_cursor(target_cursor, direction, jump_words)
+        self._delete(self.cursor, target_cursor)
+        self.cursor = min(target_cursor, self.cursor)
 
     def _handle_backspace(self, ctrl_pressed: bool = False):
         """Handle backspace key."""
-        if not self._delete_selection():
-            if ctrl_pressed:
-                new_pos = self._find_word_start(self.cursor)
-                if new_pos < self.cursor:
-                    self.text = self.text[:new_pos] + self.text[self.cursor:]
-                    self.cursor = new_pos
-            elif self.cursor > 0:
-                self.text = self.text[:self.cursor - 1] + self.text[self.cursor:]
-                self.cursor -= 1
+        # if not self._delete_selection():
+        if ctrl_pressed:
+            new_pos = self._find_word_start(self.cursor)
+            if new_pos < self.cursor:
+                self.lines = self.lines[:new_pos] + self.lines[self.cursor:]
+                self.cursor = new_pos
+        elif self.cursor > 0:
+            self.lines = self.lines[:self.cursor - 1] + self.lines[self.cursor:]
+            self.cursor -= 1
         self._update_scroll()
 
+    '''
     def _handle_delete(self, ctrl_pressed: bool = False):
         """Handle delete key."""
         if not self._delete_selection():
@@ -519,8 +623,9 @@ class TextField(BaseElement):
             elif self.cursor < len(self.text):
                 self.text = self.text[:self.cursor] + self.text[self.cursor + 1:]
         self._update_scroll()
+    '''
 
-    def _get_selection_range(self) -> Tuple[int, int]:
+    def _get_selection_range(self) -> Tuple[Cursor, Cursor]:
         """Get the start and end of the current selection (ordered)."""
         if self.selection_start is None:
             return self.cursor, self.cursor
@@ -530,12 +635,41 @@ class TextField(BaseElement):
         """Delete selected text if any. Returns True if text was deleted."""
         start, end = self._get_selection_range()
         if start != end:
-            self.text = self.text[:start] + self.text[end:]
+            self._delete(start, end)
             self.cursor = start
             self.selection_start = None
             return True
         return False
 
+    def _delete(self, start: Cursor, end: Cursor):
+        """Delete text between both cursors."""
+        if end < start:
+            start, end = end, start
+        max_width = self.rect.width - 2 * self.padding
+
+        if start.line_index == end.line_index:
+            line = self._get_line(start)
+            line.delete(start, end)
+            line.auto_wrap(self.font, max_width)
+        else:
+            new_lines = self.lines[:start.line_index]
+
+            last_start_line = self.lines[end.line_index]
+            last_start_line.delete(start, last_start_line.end())
+
+            first_end_line = self.lines[end.line_index]
+            first_end_line.delete((0, 0), end)
+
+            middle_line = Line(last_start_line.paragraphs + first_end_line.paragraphs)
+            middle_line.ensure_paragraph()
+            middle_line.auto_wrap(self.font, max_width)
+            new_lines.append(middle_line)
+
+            new_lines.extend(self.lines[end.line_index + 1:])
+            self.lines = new_lines
+        self.cursor = self._clamp_cursor(start)
+
+    '''
     def _select_all(self):
         """Select all text."""
         self.selection_start = 0
@@ -590,12 +724,9 @@ class TextField(BaseElement):
         clip_rect = screen.get_clip()
         screen.set_clip(text_area)
 
-        wrapped_lines = self.text
-        visible_lines = max(1, int(text_area.height / self.line_height))
-
         # Draw text or placeholder
         y_pos = text_area.top + self.padding
-        for line_index, line in enumerate(self.text):
+        for line_index, line in enumerate(self.lines):
             for paragraph_index, paragraph in enumerate(line.paragraphs):
                 text_surface = self.font.render(paragraph, True, self.text_color)
                 screen.blit(text_surface, (text_area.left, y_pos))
