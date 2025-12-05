@@ -8,11 +8,11 @@ from peng_ui.viewer import Viewer
 
 class MyViewer(Viewer):
     def __init__(self):
-        super().__init__(screen_size=(0, 0), flags=pg.FULLSCREEN)
+        super().__init__(screen_size=(800, 600))
         self.button = Button(pg.Rect(50, 50, 120, 40), "hello")
         self.label = Label(pg.Rect(50, 100, 120, 40), "hello")
         self.edit_field = EditField(pg.Rect(200, 50, 220, 40), "hello")
-        self.text_field = TextField(pg.Rect(200, 100, 220, 140), "hello")
+        self.text_field = TextField(pg.Rect(200, 100, 520, 440), "Heyho")
 
     def tick(self):
         if self.button.is_clicked:
